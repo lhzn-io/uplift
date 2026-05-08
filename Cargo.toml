@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/uplift",
+    "crates/uplift-observer",
+]
+# stack/zeroclaw is consumed as a git submodule and has its own workspace.
+exclude = [
+    "stack/zeroclaw",
+]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Long Horizon Observatory <https://github.com/lhzn-io>"]
+repository = "https://github.com/lhzn-io/uplift"
+rust-version = "1.75"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.10", features = ["v4", "serde"] }
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+arrow = "53"
+parquet = "53"

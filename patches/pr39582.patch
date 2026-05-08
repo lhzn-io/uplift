@@ -1,0 +1,221 @@
+From f47faeab7f3d4aa1b60f203c66f541551566e94c Mon Sep 17 00:00:00 2001
+From: neotea <hans-mustermann@web.de>
+Date: Sat, 11 Apr 2026 18:36:20 +0200
+Subject: [PATCH 1/2] [Bugfix][Gemma4] Fix quantized MoE weight loading and KV
+ cache spec merge
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Three issues prevent serving quantized Gemma 4 MoE checkpoints
+(e.g. cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit):
+
+1. The 3D→2D expert weight explosion in _weight_iterator only matched
+   exact projection names (gate_up_proj, down_proj). Compressed-tensors
+   and AWQ checkpoints store quantized weights with underscore suffixes
+   (gate_up_proj_packed, down_proj_scale, etc.) which were silently
+   dropped, causing KeyError during loading.
+
+2. The expert_params_mapping loop only handled dot-separated suffixes
+   (.weight_scale) and bare names, but not the underscore suffixes
+   (_packed, _scale) used by compressed-tensors quantization.
+
+3. FullAttentionSpec.merge() and SinkFullAttentionSpec.merge() did not
+   forward cache_dtype_str to the merged spec, so the subsequent
+   field-equality assertion always failed when cache_dtype_str was set.
+
+Additionally, Gemma4Router.proj (GateLinear) was not receiving
+quant_config, which caused crashes when router weights were quantized.
+
+Tested with cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit on a single RTX 3090
+(24 GB) — model loads and generates correct output.
+
+Signed-off-by: neotea <neotea@users.noreply.github.com>
+Co-authored-by: Claude <noreply@anthropic.com>
+---
+ vllm/model_executor/models/gemma4.py | 53 +++++++++++++++++++++-------
+ vllm/v1/kv_cache_interface.py        | 12 +++++--
+ 2 files changed, 50 insertions(+), 15 deletions(-)
+
+diff --git a/vllm/model_executor/models/gemma4.py b/vllm/model_executor/models/gemma4.py
+index 06189540090d..2a78d0f270a2 100644
+--- a/vllm/model_executor/models/gemma4.py
++++ b/vllm/model_executor/models/gemma4.py
+@@ -168,6 +168,7 @@ def __init__(
+             config.num_experts,
+             bias=False,
+             out_dtype=torch.float32,
++            quant_config=quant_config,
+             prefix=f"{prefix}.proj",
+         )
+ 
+@@ -1342,13 +1343,14 @@ def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
+                     expert_id,
+                     shard_id,
+                 ) in expert_params_mapping:
+-                    # Match both:
+-                    #  - Bare weights: "experts.0.down_proj" (from 3D explosion)
+-                    #  - With suffix: "experts.0.down_proj.weight_scale" (2D quantized)
+-                    # weight_name has trailing dot, so check with and without it
++                    # Match weight names in three forms:
++                    #  1. Dot suffix: "experts.0.down_proj.weight_scale"
++                    #  2. Bare weight: "experts.0.down_proj" (from 3D explosion)
++                    #  3. Underscore suffix: "experts.0.down_proj_packed"
++                    #     (from compressed-tensors / AWQ quantization)
+                     weight_name_base = weight_name.rstrip(".")
+                     if weight_name in name:
+-                        # Has suffix (e.g., .weight_scale)
++                        # Has dot suffix (e.g., .weight_scale)
+                         moe_name = name.replace(weight_name, param_name)
+                     elif name.endswith(weight_name_base):
+                         # Bare weight (no suffix)
+@@ -1356,7 +1358,19 @@ def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
+                             weight_name_base, param_name.rstrip("_") + "_weight"
+                         )
+                     else:
+-                        continue
++                        # Check for underscore suffix (e.g., _packed, _scale)
++                        m_us = re.match(
++                            re.escape(weight_name_base) + r"_(\w+)$",
++                            name[name.find("experts."):] if "experts." in name else "",
++                        )
++                        if m_us:
++                            us_suffix = "_" + m_us.group(1)
++                            moe_name = name.replace(
++                                weight_name_base + us_suffix,
++                                param_name + "weight" + us_suffix,
++                            )
++                        else:
++                            continue
+                     if moe_name not in params_dict:
+                         continue
+                     if is_pp_missing_parameter(moe_name, self):
+@@ -1566,22 +1580,35 @@ def _weight_iterator():
+                 #
+                 # No transpose needed: checkpoint orientation already
+                 # matches FusedMoE's expected layout.
+-                if "moe.gate_up_proj" in name and weight.dim() == 3:
++                #
++                # Handle both unquantized weights (gate_up_proj,
++                # down_proj) and quantized weights with suffixes
++                # (gate_up_proj_packed, gate_up_proj_scale,
++                # down_proj_packed, down_proj_scale) from
++                # compressed-tensors / AWQ quantization.
++                m_gup = re.match(r"(.*)moe\.gate_up_proj(_.*)?$", name)
++                if m_gup and weight.dim() == 3:
++                    suffix = m_gup.group(2) or ""
+                     num_experts = weight.size(0)
+                     intermediate_size = weight.size(1) // 2
+                     for expert_id in range(num_experts):
+                         gate_weight = weight[expert_id, :intermediate_size, :]
+                         up_weight = weight[expert_id, intermediate_size:, :]
+-                        base = name.replace("moe.", f"moe.experts.{expert_id}.")
+-                        yield base.replace("gate_up_proj", "gate_proj"), gate_weight
+-                        yield base.replace("gate_up_proj", "up_proj"), up_weight
++                        prefix = name[:m_gup.end(1)]
++                        yield (f"{prefix}moe.experts.{expert_id}"
++                               f".gate_proj{suffix}"), gate_weight
++                        yield (f"{prefix}moe.experts.{expert_id}"
++                               f".up_proj{suffix}"), up_weight
+                     continue
+ 
+-                if "moe.down_proj" in name and weight.dim() == 3:
++                m_dp = re.match(r"(.*)moe\.down_proj(_.*)?$", name)
++                if m_dp and weight.dim() == 3:
++                    suffix = m_dp.group(2) or ""
+                     num_experts = weight.size(0)
+                     for expert_id in range(num_experts):
+-                        expert_name = name.replace("moe.", f"moe.experts.{expert_id}.")
+-                        yield expert_name, weight[expert_id]
++                        prefix = name[:m_dp.end(1)]
++                        yield (f"{prefix}moe.experts.{expert_id}"
++                               f".down_proj{suffix}"), weight[expert_id]
+                     continue
+ 
+                 # k_eq_v layers: checkpoint has k_proj but no v_proj.
+diff --git a/vllm/v1/kv_cache_interface.py b/vllm/v1/kv_cache_interface.py
+index 6f8ad8e7d8ef..36ce6bf27a53 100644
+--- a/vllm/v1/kv_cache_interface.py
++++ b/vllm/v1/kv_cache_interface.py
+@@ -218,6 +218,7 @@ def merge(cls, specs: list[Self]) -> Self:
+             dtype=specs[0].dtype,
+             kv_quant_mode=specs[0].kv_quant_mode,
+             page_size_padded=specs[0].page_size_padded,
++            cache_dtype_str=specs[0].cache_dtype_str,
+             sliding_window=cls.merge_window_sizes(sliding_window),
+             attention_chunk_size=cls.merge_window_sizes(attention_chunk_size),
+         )
+@@ -225,7 +226,10 @@ def merge(cls, specs: list[Self]) -> Self:
+             for f in fields(AttentionSpec):
+                 assert getattr(spec, f.name) == getattr(merged_spec, f.name), (
+                     "All attention layers in the same KV cache group must have "
+-                    "the same attention spec."
++                    "the same attention spec. "
++                    f"Field '{f.name}': "
++                    f"{getattr(spec, f.name)!r} != "
++                    f"{getattr(merged_spec, f.name)!r}"
+                 )
+         assert (merged_spec.sliding_window is not None) + (
+             merged_spec.attention_chunk_size is not None
+@@ -413,6 +417,7 @@ def merge(cls, specs: list[Self]) -> Self:
+             dtype=specs[0].dtype,
+             kv_quant_mode=specs[0].kv_quant_mode,
+             page_size_padded=specs[0].page_size_padded,
++            cache_dtype_str=specs[0].cache_dtype_str,
+             sliding_window=cls.merge_window_sizes(sliding_window),
+             attention_chunk_size=cls.merge_window_sizes(attention_chunk_size),
+         )
+@@ -420,7 +425,10 @@ def merge(cls, specs: list[Self]) -> Self:
+             for f in fields(AttentionSpec):
+                 assert getattr(spec, f.name) == getattr(merged_spec, f.name), (
+                     "All attention layers in the same KV cache group must have "
+-                    "the same attention spec."
++                    "the same attention spec. "
++                    f"Field '{f.name}': "
++                    f"{getattr(spec, f.name)!r} != "
++                    f"{getattr(merged_spec, f.name)!r}"
+                 )
+         assert (merged_spec.sliding_window is not None) + (
+             merged_spec.attention_chunk_size is not None
+
+From 118ae4481ebd137fcab56eedb7b7deec98721ded Mon Sep 17 00:00:00 2001
+From: neotea <hans-mustermann@web.de>
+Date: Sat, 11 Apr 2026 20:39:22 +0200
+Subject: [PATCH 2/2] Move cache_dtype_str from MLAAttentionSpec to
+ AttentionSpec
+
+cache_dtype_str was defined only on MLAAttentionSpec, but it is
+relevant for all attention types (e.g. FP8 KV cache, TurboQuant).
+Move it to the base AttentionSpec so FullAttentionSpec.merge() and
+SinkFullAttentionSpec.merge() can forward it without a TypeError.
+
+Addresses review feedback from gemini-code-assist.
+
+Signed-off-by: neotea <neotea@users.noreply.github.com>
+Co-authored-by: Claude <noreply@anthropic.com>
+---
+ vllm/v1/kv_cache_interface.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/vllm/v1/kv_cache_interface.py b/vllm/v1/kv_cache_interface.py
+index 36ce6bf27a53..e9c8de618d05 100644
+--- a/vllm/v1/kv_cache_interface.py
++++ b/vllm/v1/kv_cache_interface.py
+@@ -117,6 +117,7 @@ class AttentionSpec(KVCacheSpec):
+     dtype: torch.dtype
+     kv_quant_mode: KVQuantMode = KVQuantMode.NONE
+     page_size_padded: int | None = None
++    cache_dtype_str: str | None = None
+ 
+     @property
+     def page_size_bytes(self) -> int:
+@@ -251,8 +252,7 @@ def real_page_size_bytes(self) -> int:
+ 
+ @dataclass(frozen=True, kw_only=True)
+ class MLAAttentionSpec(FullAttentionSpec):
+-    # TODO(Lucas/Chen): less hacky way to do this
+-    cache_dtype_str: str | None = None
++    # cache_dtype_str is inherited from AttentionSpec
+ 
+     @property
+     def real_page_size_bytes(self) -> int:

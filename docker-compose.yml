@@ -1,0 +1,85 @@
+# docker-compose.yml — Sovereign Node Inference Layer
+#
+# This compose file manages the inference backend only.
+# ZeroClaw routes directly to the reasoning engine on localhost:8000.
+#
+
+services:
+  # THE BRAIN: Nemotron-3-Nano-30B-A3B-AWQ via vLLM
+  # Serves the OpenAI-compatible API on port 8000.
+  reasoning-engine:
+    image: ${VLLM_IMAGE}
+    runtime: nvidia
+    shm_size: "16g"
+    ports:
+      - "8000:8000"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - HF_TOKEN=${HF_TOKEN:-}
+      # Point HF cache at the pre-downloaded model weights if available
+      - HF_HOME=/data/models/huggingface
+      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
+      - HF_DATASETS_OFFLINE=${HF_DATASETS_OFFLINE:-1}
+      - VLLM_MODEL=${VLLM_MODEL}
+      - VLLM_SERVED_MODEL_NAME=${VLLM_SERVED_MODEL_NAME}
+      - VLLM_GPU_MEMORY_UTILIZATION=${VLLM_GPU_MEMORY_UTILIZATION}
+      - VLLM_EXTRA_ARGS=${VLLM_EXTRA_ARGS}
+    volumes:
+      - ./models:/data/models
+      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ./patches/gemma4_patch.py:/opt/venv/lib/python3.10/site-packages/vllm/model_executor/models/gemma4.py
+    command: ["bash", "-c", "vllm serve $$VLLM_MODEL --served-model-name $$VLLM_SERVED_MODEL_NAME --gpu-memory-utilization $$VLLM_GPU_MEMORY_UTILIZATION $$VLLM_EXTRA_ARGS --port 8000"]
+    restart: unless-stopped
+
+  zeroclaw:
+    build:
+      context: ./stack/zeroclaw
+    image: zeroclaw:latest
+    ports:
+      - "42617:42617"
+    environment:
+      - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
+      - ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
+      - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-vllm}
+      - DEFAULT_MODEL=${VLLM_SERVED_MODEL_NAME:-nvidia/nemotron-3-nano-30b-a3b}
+      - ZEROCLAW_GATEWAY_PORT=42617
+      - ZEROCLAW_NO_SANDBOX=1
+    volumes:
+      - ./.zeroclaw:/zeroclaw-data/.zeroclaw
+      - ./workspace:/zeroclaw-data/workspace
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    depends_on:
+      - reasoning-engine
+      - browser-node
+      - jetson-telemetry
+
+  browser-node:
+    image: seleniarm/standalone-chromium:latest
+    shm_size: "2g"
+    ports:
+      - "4444:4444"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  jetson-telemetry:
+    build:
+      context: ./stack/jetson-telemetry-mcp
+    image: jetson-telemetry-mcp:latest
+    ports:
+      - "8765:8765"
+    environment:
+      - MCP_TRANSPORT=sse
+      - PORT=8765
+    volumes:
+      - /sys:/sys:ro
+      - /var/lib/nvpmodel/status:/var/lib/nvpmodel/status:ro
+      - /usr/bin/tegrastats:/usr/bin/tegrastats:ro
+      - /usr/sbin/nvpmodel:/usr/sbin/nvpmodel:ro
+      - /usr/bin/jetson_clocks:/usr/bin/jetson_clocks:ro
+      - /dev:/dev:ro
+      - /etc/nv_tegra_release:/etc/nv_tegra_release:ro
+    restart: unless-stopped
+    privileged: true

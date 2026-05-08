@@ -1,0 +1,5 @@
+models/
+engines/
+zeroclaw-data/
+opencv_workspace/
+*.log

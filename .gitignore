@@ -1,0 +1,58 @@
+# Instance secrets
+.env
+certs/
+.claude/
+
+# IDE / editor
+.vscode/
+
+# zeroclaw runtime state (rendered from configs/zeroclaw.toml.template)
+.zeroclaw/
+configs/zeroclaw.toml
+zeroclaw-data/
+workspace/
+
+# Model weights (download on bootstrap)
+models/
+
+# Build artifacts
+engines/
+opencv_workspace/
+molmo_checkpoints/
+target/
+
+# Python venvs
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+*.out
+*.pid
+*.tmp
+
+# Large generated files
+baseline.json
+schema.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Verification harness output
+tests/results/
+
+# Benchmark runs — keep only the always-current `_latest.json` snapshot,
+# ignore the timestamped archives so git history doesn't accumulate
+# generated artifacts.
+tests/benchmarks/results/agent_overhead_*Z.json
+
+# Per-milestone working drafts (e.g. v0.2-milestone.md) stay local;
+# `docs/planning/roadmap.md` is the public, version-tracked plan.
+docs/planning/v*-milestone.md
+
+# Session artifacts
+BREAK_CHECKPOINT.md

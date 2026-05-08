@@ -1,0 +1,27 @@
+[package]
+name = "uplift"
+version = "0.2.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Trace schema and uplift estimators for the Uplift Core agent stack."
+
+[lib]
+name = "uplift"
+path = "src/lib.rs"
+
+[[bin]]
+name = "uplift-trace"
+path = "src/bin/uplift_trace.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+arrow = { workspace = true }
+parquet = { workspace = true }
