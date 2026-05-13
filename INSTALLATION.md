@@ -1,63 +1,46 @@
-# Long Horizon Uplift Platform — Installation
+# Uplift Installation
 
-Optimized for Jetson Orin AGX on JetPack 6.x. The [README](README.md) covers the architectural overview and the day-to-day operator path; this document covers deeper install steps, edge cases, and troubleshooting.
+Optimized for NVIDIA Jetson Orin AGX on JetPack 6.x. The [README](README.md) covers the day-to-day operator path; this document details the host provisioning, build process, and troubleshooting.
 
-## 1. One-time Host Provisioning
+## 1. Host Provisioning
 
-After flashing the Jetson:
+After flashing the Jetson, run the provisioning script to tune the hardware and configure the Docker runtime:
 
 ```bash
 chmod +x jetson/provision_orin.sh start_stack.sh stop_stack.sh \
-         scripts/install_zeroclaw.sh scripts/verify_stack.sh \
-         scripts/neuralyzer.sh stack/build_zeroclaw.sh
+         scripts/*.sh stack/build_zeroclaw.sh
 ./jetson/provision_orin.sh
 sudo reboot
 ```
 
-[jetson/provision_orin.sh](jetson/provision_orin.sh) covers:
+[jetson/provision_orin.sh](jetson/provision_orin.sh) handles:
+- **Hardware tuning**: Sets `nvpmodel -m 0` (max power) and `jetson_clocks`.
+- **Swap**: Creates a 64 GiB `/swapfile` required for local LLM inference.
+- **Docker NVIDIA runtime**: Configures `nvidia-ctk` and cgroups.
+- **Networking**: Configures `br_netfilter` and pins `iptables-legacy` (required for JetPack 6).
 
-- **Hardware tuning:** `nvpmodel -m 0` (max power), `jetson_clocks`
-- **Swap:** creates `/swapfile` (64 GiB) if missing, adds it to `/etc/fstab`
-- **Docker NVIDIA runtime:** `nvidia-ctk runtime configure --runtime=docker`
-- **cgroups:** writes `default-cgroupns-mode=host` into `/etc/docker/daemon.json` and restarts Docker
-- **Networking:** loads `br_netfilter`, enables bridge sysctls, switches to `iptables-legacy` (JetPack 6 / 5.15 Tegra kernel does not handle nf_tables properly)
-- **Verify:** prints status of each of the above
+## 2. Build Agent Image
 
-Reboot afterwards to pick up the Docker daemon changes and persist the kernel-module config.
-
-## 2. Build the zeroclaw Container Image
-
-The container image bakes in upstream zeroclaw with the Uplift observer patched in. [stack/build_zeroclaw.sh](stack/build_zeroclaw.sh) clones the pinned upstream into `stack/zeroclaw/`, applies the observer patches, and builds the runtime with Cargo before the Docker build picks up the artifact.
+The `zeroclaw` image is built by patching the upstream daemon with the **Uplift Observer**.
 
 ```bash
 ./stack/build_zeroclaw.sh
 docker compose build zeroclaw
 ```
 
-The first run is slow (full Cargo `release-fast` build of `zeroclaw-runtime`). The build has a `trap` that restores all patched files on exit, so the source tree should be clean after either success or failure.
+The first build is slow as it performs a full Cargo `release-fast` build. The build script uses a `trap` to restore patched files on exit, keeping the submodule tree clean.
 
-If you want to skip the full Cargo build and just rebuild the Docker layer (e.g., after a Dockerfile-only change), `docker compose build zeroclaw` alone is enough as long as the build artifact is already on disk.
+## 3. Optional: Host CLI
 
-## 3. Optional: Install the Host zeroclaw CLI
-
-Most operators don't need this — `start_stack.sh` runs zeroclaw as a container. Install the host CLI only if you want to interact with zeroclaw outside the compose stack.
+Most users should run the agent via Docker. Install the host-side CLI only if you need to manage the daemon outside the compose stack:
 
 ```bash
 ./scripts/install_zeroclaw.sh
 source ~/.bashrc
 ```
 
-[scripts/install_zeroclaw.sh](scripts/install_zeroclaw.sh) clones `zeroclaw-labs/zeroclaw` to a temp dir, runs upstream `install.sh`, and builds the web dashboard into `~/.zeroclaw/web_dist`.
-
-### Troubleshooting: Node.js dpkg conflict
-
-If `install_zeroclaw.sh` fails with:
-
-```
-trying to overwrite '/usr/include/node/common.gypi', which is also in package libnode-dev 12.x
-```
-
-your host has legacy Ubuntu Node 12 dev packages installed. The installer auto-remediates the common case; if apt is already left in a broken state:
+### Troubleshooting: Node.js Conflicts
+If the installer fails due to a `libnode-dev` conflict (common on older JetPack flashes):
 
 ```bash
 sudo dpkg --configure -a
@@ -67,36 +50,18 @@ sudo apt-get autoremove -y
 ./scripts/install_zeroclaw.sh
 ```
 
-## 4. First-time Bring-up
+## 4. Configuration
 
-```bash
-./start_stack.sh
-```
+The file `.zeroclaw/config.toml` is rendered from [configs/zeroclaw.toml.template](configs/zeroclaw.toml.template) by `scripts/apply_config.sh`. This process substitutes environment variables (Slack tokens, Brave API keys, model names).
 
-On a clean `.env` this defaults to Gemma4. Watch the relevant logs:
-
-```bash
-docker compose logs -f reasoning-engine    # vLLM model load (slow first time)
-docker compose logs -f zeroclaw            # agent startup
-tail -f vllm_proxy.log                     # capability shim
-```
-
-The dashboard becomes reachable at `http://127.0.0.1:42617` once zeroclaw is healthy.
-
-### Rendered config
-
-`.zeroclaw/config.toml` is rendered from [configs/zeroclaw.toml.template](configs/zeroclaw.toml.template) by [scripts/apply_config.sh](scripts/apply_config.sh), which substitutes `${VLLM_SERVED_MODEL_NAME}`, Slack tokens, and the Brave API key. Re-run it after editing `.env` or the template:
-
+To manually re-render after a config change:
 ```bash
 ./scripts/apply_config.sh
 docker compose restart zeroclaw
 ```
 
-The container also reads `DEFAULT_MODEL` (set from `VLLM_SERVED_MODEL_NAME` in `.env`) directly via env, so a model change is normally picked up by `start_stack.sh` without needing to call `apply_config.sh` by hand.
+## 5. Remote Dashboard Access
 
-## 5. Remote Access
-
-To reach the dashboard from a laptop:
 
 ```bash
 ssh -L 42617:127.0.0.1:42617 <jetson-host>
