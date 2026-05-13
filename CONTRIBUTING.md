@@ -1,78 +1,56 @@
-# Contributing to Uplift Core
+# Contributing to Uplift
 
-**Status:** Stub. Will expand as the project grows.
+Uplift is an operational AI-agent stack for sovereign edge deployment, with a focus on **causal measurement** of how much AI actually assists human operators in the field.
 
-Thanks for your interest. Uplift Core is an operational AI-agent stack
-for sovereign edge deployment, with a strong methodological commitment
-to *causal* evaluation of how much the stack levers up real human
-operators in the field. Before contributing, please skim:
+Before contributing, please review:
+- [README.md](README.md) — Stack architecture and setup.
+- [docs/methodology.md](docs/methodology.md) — The core measurement philosophy.
+- [docs/planning/roadmap.md](docs/planning/roadmap.md) — Project milestones.
 
-- [`README.md`](README.md) — what the stack is and how to run it
-- [`docs/methodology.md`](docs/methodology.md) — the methodological backbone (why we evaluate causally, what the trace schema must support, and what the anchor-deployment Key Metrics will be)
-- [`docs/planning/roadmap.md`](docs/planning/roadmap.md) — what's shipped, what's next, and the one-year success bar
+## How to Help
 
-## What we welcome
+We prioritize contributions that improve the reliability and measurability of the stack:
 
-- **Bug reports and reproductions** for the Jetson Orin stack, zeroclaw / zeroclaw / zeroclaw integration, inference provider routing, and the verification harness.
-- **Operational improvements** to the recovery, verification, and observability scripts.
-- **Methodology contributions** — issues or PRs against `docs/methodology.md`, the trace schema, or the (forthcoming) `uplift/` module. If you work in causal ML, uplift modeling, or human–AI teaming evaluation, we especially want to hear from you.
-- **Field deployment experience reports** from anyone running similar stacks in low-resource, high-stakes operational settings.
+- **Operational improvements**: Better recovery, health checks, and observability scripts for the Jetson Orin.
+- **Methodology & Trace Schema**: Enhancements to the `trace` format or the `uplift/` analysis module.
+- **Bug reports**: Specifically for the Jetson stack, routing bugs, or the verification harness.
+- **Experience reports**: Data or observations from running similar high-stakes deployments.
 
-## Developing with the ZeroClaw Submodule (Fork)
+## Developing with the ZeroClaw Submodule
 
-Because we require specific modifications for the Jetson Orin edge environment (faster build profiles, custom Docker configurations, and specific routing bug fixes like #5815), we use a **hard fork** of the upstream `zeroclaw` daemon. The submodule in `stack/zeroclaw` points to the `uplift-core` branch of our fork (`lhzn-io/zeroclaw`).
+Uplift uses a fork of the `zeroclaw` daemon in `stack/zeroclaw` to maintain specific Jetson-compatible build profiles and routing fixes.
 
-### Pulling in new upstream ZeroClaw releases
-
-When the upstream `zeroclaw-labs/zeroclaw` repository releases a new version, you must carefully merge it into our custom `uplift-core` branch to ensure we don't drop our Jetson-specific fixes.
+### Updating ZeroClaw
+To pull in new upstream releases from `zeroclaw-labs/zeroclaw`:
 
 ```bash
-# 1. Enter the submodule
 cd stack/zeroclaw
-
-# 2. Add the upstream remote (if you haven't already)
-git remote add upstream https://github.com/zeroclaw-labs/zeroclaw.git
-
-# 3. Fetch the latest upstream changes and tags
-git fetch upstream
-
-# 4. Ensure you are on our custom branch
 git checkout uplift-core
-
-# 5. Merge the new upstream release tag (e.g., v0.8.0)
-git merge v0.8.0
-
-# 6. Resolve any conflicts in our modified files. Pay special attention to:
-#    - Dockerfile (we use `release-fast` instead of `release`)
-#    - .dockerignore (we whitelist `!target/release-fast/zeroclaw`)
-#    - crates/zeroclaw-config/src/schema.rs (we have a bypass for the fallback override)
-
-# 7. Push the updated fork back to our organization
+git fetch upstream
+git merge <version-tag>
+# Resolve conflicts in Dockerfiles or build scripts
 git push origin uplift-core
-
-# 8. Return to the root uplift repository and commit the submodule pointer bump
-cd ../..
-git add stack/zeroclaw
-git commit -m "chore: bump zeroclaw submodule to v0.8.0"
 ```
 
-## What to do before opening a PR
+## Pull Request Guidelines
 
-1. Open an issue first for anything non-trivial. We would rather align on direction than receive a polished PR we cannot merge.
-2. For changes to the agent trace schema or the `uplift/` module, include a short note on the methodological implications — how does this change preserve (or improve) our ability to do causal evaluation downstream.
-3. Run `./scripts/verify_stack.sh` if your change touches the runtime path, and include the result.
-4. Keep commits focused. Match the style of recent commits (`git log`).
+1. **Start with an Issue**: Open a discussion for any non-trivial changes first.
+2. **Focus on Measurement**: If you're changing the agent or tool schema, explain how it affects (or enables) downstream causal analysis.
+3. **Verify Changes**: Run `./scripts/verify_stack.sh` if your changes affect the runtime path.
+4. **Conventional Commits**: Use `feat:`, `fix:`, `docs:`, etc. Match the style of the existing `git log`.
 
-## What we are not looking for (yet)
+## Scope
 
-- New agent framework features that do not connect to the operator-uplift mission.
-- Refactors for their own sake.
-- Benchmark scores on synthetic agent benchmarks. We care about causal effects on real operators, not aggregate win-rates.
+We are **not** currently looking for:
+- Framework features unrelated to the operator-uplift mission.
+- Purely synthetic benchmark integrations.
+- Large-scale refactors without a clear functional win.
 
-## Code of conduct
+## Code of Conduct
 
-Be kind, be specific, assume good faith, and remember that the people on the other end of this project are trying to deploy AI to help operators on offshore platforms and food bank volunteers. Keep that audience in mind.
+Be specific, assume good faith, and keep the end users (field operators and volunteers) in mind.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the Apache License, Version 2.0 (see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE)). Uplift Core is a project of Long Horizon Observatory.
+Updates and contributions are licensed under the Apache License, Version 2.0.
+
