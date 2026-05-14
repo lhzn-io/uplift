@@ -61,71 +61,60 @@ for a cold build on Orin AGX, ~1–2 minutes for incremental changes.
    `VLLM_IMAGE` / `VLLM_MODEL` / `VLLM_SERVED_MODEL_NAME` / etc. for
    the chosen model.
 2. Runs [`scripts/apply_config.sh`](../scripts/apply_config.sh) to
-   regenerate `.zeroclaw/config.toml` from the template — the
-   daemon's model name always matches what vLLM is actually serving.
+   regenerate `.zeroclaw-operator/config.toml` and `.zeroclaw-admin/config.toml`
+   from the templates — the agents' model name always matches what vLLM is actually serving.
 3. Rebuilds the `zeroclaw:latest` image using the pre-compiled
-   binary and launches `reasoning-engine` + `zeroclaw` via
+   binary and launches `reasoning-engine` + tiered agents via
    `docker compose`.
 
-Stop with `./stop_stack.sh` (full stop) or
-`./stop_stack.sh zeroclaw` (daemon-only; leaves vLLM warm).
+Stop with `./stop_stack.sh`.
 
-## Pairing the dashboard
+## Pairing the Dashboards
 
-The browser UI at `http://127.0.0.1:42617` requires a one-time pairing
-code. Generate one by invoking the daemon inside the container:
+The stack runs two separate agents with isolated browser UIs:
 
-```bash
-docker exec uplift-zeroclaw-1 zeroclaw gateway get-paircode --new
-```
+| Agent | Port | Theme | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Operator** | `42617` | Cyan (Default) | General lab tasks, supervised. |
+| **Admin** | `42618` | Yellow/Blue | DevOps, autonomous, SSH access. |
 
-Open the dashboard, enter the 6-digit code it emits, and the browser
-stores a token for subsequent connects.
-
-For a remote tunnel from a laptop:
+Each requires a one-time pairing code. Generate them by invoking the internal APIs:
 
 ```bash
-ssh -L 18790:127.0.0.1:42617 <jetson-host>
-# then open http://localhost:18790/chat?session=main#token=<gateway_token>
+# Operator Agent
+docker exec uplift-zeroclaw-operator-1 curl -X POST http://localhost:42617/api/pairing/initiate
+
+# Admin Agent
+docker exec uplift-zeroclaw-admin-1 curl -X POST http://localhost:42618/api/pairing/initiate
 ```
 
-## Using the agent
+Open the dashboards at the respective ports, enter the 6-digit code, and the browser stores a token for subsequent connects.
+
+## Using the Agents
 
 ### One-shot from the command line
 
-Useful for quick smoke tests and for anything scriptable:
+Useful for quick smoke tests:
 
 ```bash
-docker exec uplift-zeroclaw-1 zeroclaw agent -m "What's the current GPU temperature?"
-```
+# Messaging the Operator
+docker exec uplift-zeroclaw-operator-1 zeroclaw agent -m "GPU temp?"
 
-The agent answers via the `jetson-status` skill, which reads
-tegrastats / thermal zones / nvpmodel directly through its built-in
-shell tool. This is the same code path that the Slack channel and the
-dashboard both dispatch through, so it's the cleanest single-turn
-sanity check.
+# Messaging the Admin
+docker exec uplift-zeroclaw-admin-1 zeroclaw agent -m "Check status of karone.local"
+```
 
 ### Over Slack
 
-If `[channels.slack] enabled = true` in the config template and
-`SLACK_APP_TOKEN` / `SLACK_BOT_TOKEN` are set in `.env`, the daemon
-listens in Socket Mode. Messaging the bot in Slack runs the same
-agent loop as the CLI one-shot.
+If you provide separate Slack tokens in `.env`, both agents will listen in Socket Mode.
+- Messaging `@uplift-operator` reaches the **Operator Agent**.
+- Messaging `@uplift-admin` reaches the **Admin Agent**.
 
-### Benchmarking the agent round-trip
+### Remote Access (SSH)
 
-After any non-trivial change to the config template or the zeroclaw
-submodule, run the regression benchmark:
+The **Admin Agent** is specifically configured to manage other machines on your local network using SSH.
 
-```bash
-python3 tests/benchmarks/agent_overhead.py --iterations 10
-```
-
-Records prompt-token count, per-iteration latency, and
-`mean / median / p95 / stdev` to
-`tests/benchmarks/results/agent_overhead_<UTC>.json`, plus an
-always-current `agent_overhead_latest.json` pointer. See the
-`git log` on that directory for the cut-by-cut history.
+See [**SSH Setup for ZeroClaw Agent**](ssh-setup.md) for the full configuration guide.
 
 ## Verification harness
 
@@ -133,45 +122,23 @@ always-current `agent_overhead_latest.json` pointer. See the
 ./scripts/verify_stack.sh
 ```
 
-Runs host-prerequisite checks, inference reachability, zeroclaw
-control-plane health, and an end-to-end chat completion. It sources
-`scripts/env.sh` automatically, so you don't need to export VLLM_*
-vars beforehand.
-
-Useful subsets:
-
-```bash
-./scripts/verify_stack.sh --host-only
-./scripts/verify_stack.sh --skip-e2e
-```
-
-Results land in `tests/results/` as JSON.
+Runs host-prerequisite checks, inference reachability, and health checks for both agents.
 
 ## Resetting agent state
 
-When you want to start clean — wipe memory, sessions, and workspace
-scratch without re-pairing the browser:
+When you want to start clean — wipe memory and sessions for **both** tiers:
 
 ```bash
 ./scripts/neuralyzer.sh
 ```
 
-(The name is a Men-in-Black reference: it *neuralyzes* the agent's
-memory of prior interactions.) It stops the running daemon, removes
-state files under `.zeroclaw/workspace/state/`, and is safe to run at
-any time.
-
-For a stack-level restart without a state wipe:
-
-```bash
-./stop_stack.sh zeroclaw && ./start_stack.sh
-```
+It stops the running agents, removes state files under their respective tiered directories, and is safe to run at any time.
 
 ## Quick failure map
 
 | Symptom | Likely cause | Next step |
 |---|---|---|
-| Dashboard shows "Health Offline" | Gateway forward died | `docker restart uplift-zeroclaw-1` |
+| Dashboard shows "Health Offline" | Gateway forward died | `docker compose restart zeroclaw-operator` |
 | `HTTP 503: inference service unavailable` | vLLM is loading or crashed | `docker logs --tail 100 uplift-reasoning-engine-1` |
-| `The model 'X' does not exist (404)` | Daemon and vLLM disagree on model name | `./scripts/apply_config.sh && docker compose restart zeroclaw` |
-| `docker compose ps` errors with VLLM_* | Shell doesn't have env vars | `source scripts/env.sh` |
+| `[Error] All providers failed` | Network misconfig or vLLM loading | Wait 5 mins for `torch.compile` or check `scripts/apply_config.sh` |
+| `The model 'X' does not exist (404)` | Daemon and vLLM disagree on model name | `./scripts/apply_config.sh && docker compose restart` |

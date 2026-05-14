@@ -56,3 +56,8 @@ docs/planning/v*-milestone.md
 
 # Session artifacts
 BREAK_CHECKPOINT.md
+.zeroclaw-*
+workspace-*
+.zeroclaw-*
+workspace-*
+.zeroclaw/

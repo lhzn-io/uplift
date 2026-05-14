@@ -5,15 +5,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="${WORKSPACE_ROOT}/.env"
-TEMPLATE_FILE="${WORKSPACE_ROOT}/configs/zeroclaw.toml.template"
-TARGET_CONFIG="${WORKSPACE_ROOT}/.zeroclaw/config.toml"
 
-echo "Applying configuration patches..."
+echo "Applying Agent configuration and bootstrapping workspaces..."
 
 # Load environment variables if .env exists
 if [ -f "$ENV_FILE" ]; then
     echo "Loading secrets from .env..."
-    # Export vars strictly to avoid leaking other settings unintentionally
     set -a
     source "$ENV_FILE"
     set +a
@@ -21,22 +18,44 @@ else
     echo "Warning: .env file not found at $ENV_FILE. Will rely on exported environment variables."
 fi
 
-if [ ! -f "$TEMPLATE_FILE" ]; then
-    echo "Error: Template file $TEMPLATE_FILE not found."
-    exit 1
-fi
-
-# Default the served model name to the Gemma4 baseline if the caller hasn't
-# set it (e.g. apply_config.sh invoked outside start_stack.sh). start_stack.sh
-# overrides this when --model nemotron is passed.
+# Default variables
 : "${VLLM_SERVED_MODEL_NAME:=gemma-4-26b-a4b}"
+: "${VLLM_API_KEY:=}"
 export VLLM_SERVED_MODEL_NAME
+export VLLM_API_KEY
 
-echo "Templating config into $TARGET_CONFIG (model=${VLLM_SERVED_MODEL_NAME})..."
-mkdir -p "$(dirname "$TARGET_CONFIG")"
+SUBST_VARS='${VLLM_API_KEY} ${SLACK_OPERATOR_APP_TOKEN} ${SLACK_OPERATOR_BOT_TOKEN} ${SLACK_ALLOWED_OPERATOR_USERS} ${SLACK_ADMIN_APP_TOKEN} ${SLACK_ADMIN_BOT_TOKEN} ${SLACK_ALLOWED_ADMIN_USERS} ${BRAVE_SEARCH_API_KEY} ${VLLM_SERVED_MODEL_NAME}'
 
-# Restrict envsubst to the known-safe variables so it doesn't mangle any
-# unrelated $ syntax elsewhere in the template.
-envsubst '${SLACK_APP_TOKEN} ${SLACK_BOT_TOKEN} ${BRAVE_SEARCH_API_KEY} ${VLLM_SERVED_MODEL_NAME}' < "$TEMPLATE_FILE" > "$TARGET_CONFIG"
+# Helper function to bootstrap an agent tier
+bootstrap_agent() {
+    local tier=$1
+    local target_dir="${WORKSPACE_ROOT}/.zeroclaw-${tier}"
+    local workspace_dir="${target_dir}/workspace"
+    local template="configs/zeroclaw-${tier}.toml.template"
+    
+    echo "--- Bootstrapping ${tier^} Agent ---"
+    
+    # 1. Create directories
+    mkdir -p "${workspace_dir}"
+    
+    # 2. Template configuration
+    echo "Templating config into ${target_dir}/config.toml..."
+    envsubst "$SUBST_VARS" < "${WORKSPACE_ROOT}/${template}" > "${target_dir}/config.toml"
+    
+    # 3. Initialize workspace documents from bootstrap templates
+    # (We only copy Markdown files to avoid clobbering databases/state)
+    echo "Initializing workspace documents..."
+    cp "${WORKSPACE_ROOT}/configs/bootstrap/IDENTITY.md" "${workspace_dir}/"
+    cp "${WORKSPACE_ROOT}/configs/bootstrap/USER.md"     "${workspace_dir}/"
+    cp "${WORKSPACE_ROOT}/configs/bootstrap/AGENTS.md"   "${workspace_dir}/"
+    cp "${WORKSPACE_ROOT}/configs/bootstrap/TOOLS.md"    "${workspace_dir}/"
+    
+    # Tier-specific soul
+    cp "${WORKSPACE_ROOT}/configs/bootstrap/SOUL-${tier}.md" "${workspace_dir}/SOUL.md"
+}
 
-echo "Configuration patched successfully!"
+# Run bootstrap for both tiers
+bootstrap_agent "operator"
+bootstrap_agent "admin"
+
+echo "Configuration and workspace bootstrapping completed successfully!"

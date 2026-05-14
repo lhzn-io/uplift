@@ -4,7 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-echo "Wiping ZeroClaw memory and session state..."
+echo "Wiping Agent memory and session state..."
 
 WIPE_STATE=true
 WIPE_SESSIONS=false
@@ -36,47 +36,42 @@ fi
 echo "Preparing to wipe selected memory..."
 
 # Stop daemon/container if running to release database locks
-echo "Stopping zeroclaw process and docker container..."
-(cd "$PROJECT_ROOT" && docker compose stop zeroclaw 2>/dev/null) || true
-pkill -f zeroclaw || true
+echo "Stopping Agent services..."
+(cd "$PROJECT_ROOT" && docker compose stop zeroclaw-operator zeroclaw-admin 2>/dev/null) || true
 
-if [ "$WIPE_STATE" = true ]; then
-    echo "- Wiping physical state files and pairings..."
-    for base in "${PROJECT_ROOT}/workspace" "${PROJECT_ROOT}/.zeroclaw/workspace"; do
-        if [ -d "$base/state" ]; then
-            rm -rf "${base}/state/"*
-        fi
-        if [ -f "$base/devices.db" ]; then
-            rm -f "$base/devices.db"
-            rm -f "$base/devices.db-wal"
-            rm -f "$base/devices.db-shm"
-        fi
-    done
-    rm -f "${PROJECT_ROOT}/.zeroclaw/daemon_state.json"
-    echo "  Ok. State and pairings wiped successfully."
-fi
+AGENT_BASES=("${PROJECT_ROOT}/.zeroclaw-operator" "${PROJECT_ROOT}/.zeroclaw-admin")
 
-if [ "$WIPE_SESSIONS" = true ]; then
-    echo "- Wiping chat sessions..."
-    for base in "${PROJECT_ROOT}/workspace" "${PROJECT_ROOT}/.zeroclaw/workspace"; do
-        if [ -d "$base/sessions" ]; then
-            rm -rf "${base}/sessions/"*
+for base in "${AGENT_BASES[@]}"; do
+    workspace="${base}/workspace"
+    echo "--- Wiping ${base##*/} ---"
+    
+    if [ "$WIPE_STATE" = true ]; then
+        echo "- Wiping physical state files and pairings..."
+        if [ -d "$workspace/state" ]; then
+            rm -rf "${workspace}/state/"*
         fi
-    done
-    echo "  Ok. Chat sessions purged."
-fi
+        if [ -f "$workspace/devices.db" ]; then
+            rm -f "$workspace/devices.db"*
+        fi
+        rm -f "${base}/daemon_state.json"
+    fi
 
-if [ "$WIPE_MEMORY" = true ]; then
-    echo "- Wiping long-term memory (knowledge)..."
-    for base in "${PROJECT_ROOT}/workspace" "${PROJECT_ROOT}/.zeroclaw/workspace"; do
-        if [ -d "$base/memory" ]; then
-            rm -rf "${base}/memory/"*
+    if [ "$WIPE_SESSIONS" = true ]; then
+        echo "- Wiping chat sessions..."
+        if [ -d "$workspace/sessions" ]; then
+            rm -rf "${workspace}/sessions/"*
         fi
-    done
-    echo "  Ok. Long-term memory purged."
-fi
+    fi
+
+    if [ "$WIPE_MEMORY" = true ]; then
+        echo "- Wiping long-term memory (knowledge)..."
+        if [ -d "$workspace/memory" ]; then
+            rm -rf "${workspace}/memory/"*
+        fi
+    fi
+done
 
 echo ""
 echo "Neuralyzer complete. Bring the stack back up with:"
-echo "  docker compose restart zeroclaw"
+echo "  ./scripts/apply_config.sh && docker compose up -d"
 echo "  (or ./start_stack.sh)"

@@ -5,8 +5,8 @@ fallback = "vllm"
 
 [providers.models.vllm]
 model = "${VLLM_SERVED_MODEL_NAME}"
-base_url = "http://host.docker.internal:8100/v1"
-api_key = "enc2:fbf21eab9820c0659d69844dc187c654448ee04c8c3c88bde390aeaacabe56c9c2"
+base_url = "http://127.0.0.1:8100/v1"
+api_key = "${VLLM_API_KEY}"
 merge_system_into_user = false
 requires_openai_auth = false
 temperature = 0.7
@@ -53,21 +53,19 @@ max_tokens = 8192
 [agent.thinking]
 default_level = "medium"
 
-[agents]
-
 [autonomy]
-allowed_commands = ["*"]
-allowed_roots = []
+allowed_commands = ["*", "ssh"]
+allowed_roots = ["~/.ssh"]
 always_ask = []
 auto_approve = ["*"]
-block_high_risk_commands = true
-forbidden_paths = ["/etc", "/root", "/home", "/usr", "/bin", "/sbin", "/lib", "/opt", "/boot", "/dev", "/proc", "/sys", "/var", "/tmp", "~/.ssh", "~/.gnupg", "~/.aws", "~/.config"]
-level = "supervised"
+block_high_risk_commands = false
+forbidden_paths = ["/etc", "/root", "/home", "/usr", "/bin", "/sbin", "/lib", "/opt", "/boot", "/dev", "/proc", "/sys", "/var", "/tmp", "~/.gnupg", "~/.aws", "~/.config"]
+level = "full"
 max_actions_per_hour = 20
 max_cost_per_day_cents = 500
 non_cli_excluded_tools = []
 require_approval_for_medium_risk = true
-shell_env_passthrough = []
+shell_env_passthrough = ["SSH_AUTH_SOCK"]
 shell_timeout_secs = 60
 workspace_only = true
 
@@ -112,9 +110,9 @@ show_tool_calls = false
 
 [channels.slack]
 thread_replies = false
-allowed_users = ["*"]
-app_token = "${SLACK_APP_TOKEN}"
-bot_token = "${SLACK_BOT_TOKEN}"
+allowed_users = [${SLACK_ALLOWED_ADMIN_USERS}]
+app_token = "${SLACK_ADMIN_APP_TOKEN}"
+bot_token = "${SLACK_ADMIN_BOT_TOKEN}"
 channel_ids = ["*"]
 draft_update_interval_ms = 1200
 enabled = true
@@ -225,7 +223,7 @@ host = "[::]"
 idempotency_max_keys = 10000
 idempotency_ttl_secs = 300
 pair_rate_limit_per_minute = 10
-paired_tokens = ["enc2:5720766297fe0ead103228242b239d1ebb6d8b6b83ec73204e68c57a0ae44b110a32be582c95c1d4b610b895df5bae50c3a4293651399e333b03b13492389255a1011070ea8d4864ce3077ea2cdc20e27e43303cf4a720b97f8ab9e6"]
+paired_tokens = [""]
 port = 42617
 rate_limit_max_keys = 10000
 require_pairing = true
@@ -382,7 +380,6 @@ backend = "sqlite"
 chunk_max_tokens = 512
 conflict_threshold = 0.85
 conversation_retention_days = 30
-default_namespace = "default"
 embedding_cache_size = 10000
 embedding_dimensions = 1536
 embedding_model = "text-embedding-3-small"

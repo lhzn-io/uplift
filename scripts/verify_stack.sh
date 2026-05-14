@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/verify_stack.sh — full stack verification harness
 #
-# Runs text-based integrity tests for host, inference, zeroclaw,
+# Runs text-based integrity tests for host, inference, zeroclaw agents,
 # and end-to-end chat completions.
 set -Eeuo pipefail
 
@@ -99,13 +99,15 @@ wait_for_inference_ready() {
   local timeout_sec="${1:-420}"
   local deadline=$(( $(date +%s) + timeout_sec ))
 
+  # Check either directly or via proxy (8100)
   echo "==> Waiting for inference API readiness (timeout: ${timeout_sec}s)"
   while [[ $(date +%s) -lt ${deadline} ]]; do
-    if curl -fsS --max-time 4 "http://127.0.0.1:8000/v1/models" >/dev/null 2>&1; then
+    if curl -fsS --max-time 4 "http://127.0.0.1:8100/v1/models" >/dev/null 2>&1 || \
+       curl -fsS --max-time 4 "http://127.0.0.1:8000/v1/models" >/dev/null 2>&1; then
       echo "    inference API is ready"
       return 0
     fi
-    sleep 2
+    sleep 5
   done
 
   echo "    inference API did not become ready within ${timeout_sec}s"
@@ -132,9 +134,14 @@ if [[ "${RUN_ZEROCLAW}" == "true" ]]; then
     docker compose -f "${ROOT_DIR}/docker-compose.yml" up -d jetson-telemetry >/dev/null
   fi
   
-  if ! docker compose -f "${ROOT_DIR}/docker-compose.yml" ps zeroclaw 2>/dev/null | grep -q 'Up'; then
-    echo "==> Starting zeroclaw container"
-    docker compose -f "${ROOT_DIR}/docker-compose.yml" up -d zeroclaw >/dev/null
+  if ! docker compose -f "${ROOT_DIR}/docker-compose.yml" ps zeroclaw-operator 2>/dev/null | grep -q 'Up'; then
+    echo "==> Starting zeroclaw-operator container"
+    docker compose -f "${ROOT_DIR}/docker-compose.yml" up -d zeroclaw-operator >/dev/null
+  fi
+
+  if ! docker compose -f "${ROOT_DIR}/docker-compose.yml" ps zeroclaw-admin 2>/dev/null | grep -q 'Up'; then
+    echo "==> Starting zeroclaw-admin container"
+    docker compose -f "${ROOT_DIR}/docker-compose.yml" up -d zeroclaw-admin >/dev/null
   fi
 fi
 
@@ -154,8 +161,7 @@ fi
 
 if [[ "${RUN_LAZY_LOAD}" == "true" ]]; then
   # Functional assertion that the deferred-loading path (tool_search →
-  # activate → call) works end-to-end. Distinct from `e2e-inference`
-  # which exercises vLLM directly and never goes through the agent loop.
+  # activate → call) works end-to-end.
   run_suite "lazy-load" "cd '${ROOT_DIR}' && python3 ./tests/test_05_lazy_load.py" || FAILS=$((FAILS + 1))
 fi
 
@@ -172,20 +178,14 @@ else
   echo "/!\\ Warning: Stack verified with ${FAILS} failure(s). The UI might be degraded."
 fi
 
-GATEWAY_TOKEN=$(zeroclaw uplift-agent connect <<'INNEREOF' 2>/dev/null | (grep zeroclaw_GATEWAY_TOKEN || true) | cut -d= -f2 | tr -d '\r' || true
-env
-exit
-INNEREOF
-) || true
+# Get tokens from both agents if possible
+OP_TOKEN=$(docker compose -f "${ROOT_DIR}/docker-compose.yml" exec zeroclaw-operator zeroclaw gateway list-paired-tokens 2>/dev/null | grep -v "2026-" | head -n 1 || true)
+ADMIN_TOKEN=$(docker compose -f "${ROOT_DIR}/docker-compose.yml" exec zeroclaw-admin zeroclaw gateway list-paired-tokens 2>/dev/null | grep -v "2026-" | head -n 1 || true)
 
 echo ""
 BROWSER_NODE_STATUS="Down or Missing"
 if docker compose -f "${ROOT_DIR}/docker-compose.yml" ps browser-node 2>/dev/null | grep -q 'Up'; then
-    if docker compose -f "${ROOT_DIR}/docker-compose.yml" exec browser-node curl -fsS --max-time 2 http://127.0.0.1:18789/gateway >/dev/null 2>&1; then
-        BROWSER_NODE_STATUS="Up (Connected to Gateway)"
-    else
-        BROWSER_NODE_STATUS="Up (Pending initialization or gateway unreachable)"
-    fi
+    BROWSER_NODE_STATUS="Up"
 fi
 
 JETSON_MCP_STATUS="Down or Missing"
@@ -193,16 +193,10 @@ if docker compose -f "${ROOT_DIR}/docker-compose.yml" ps jetson-telemetry 2>/dev
     JETSON_MCP_STATUS="Up (Listening on :8765)"
 fi
 
-if [[ -n "${GATEWAY_TOKEN}" ]]; then
-    echo "  Browser UI:     http://127.0.0.1:18789/chat?session=main#token=${GATEWAY_TOKEN}"
-    echo "  Local Network:  http://$(hostname -I | awk '{print $1}'):18789/chat?session=main#token=${GATEWAY_TOKEN}"
-else
-    echo "  Browser UI:     (Gateway token unavailable)"
-fi
+echo "  Operator UI:    http://$(hostname -I | awk '{print $1}'):42617"
+echo "  Admin UI:       http://$(hostname -I | awk '{print $1}'):42618 (Turbo Pascal Theme)"
 echo "  Browser Node:   ${BROWSER_NODE_STATUS}"
 echo "  Jetson MCP:     ${JETSON_MCP_STATUS}"
-echo "  Connect:        zeroclaw uplift-agent connect"
-echo "  Agent TUI:      zeroclaw tui"
 echo "  Inference logs: docker logs -f reasoning-engine"
 echo ""
 

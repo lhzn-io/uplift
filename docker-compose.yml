@@ -5,38 +5,36 @@
 #
 
 services:
-  # THE BRAIN: Nemotron-3-Nano-30B-A3B-AWQ via vLLM
-  # Serves the OpenAI-compatible API on port 8000.
+  # THE BRAIN: Nemotron-3-Nano-30B-A3B (via vLLM)
   reasoning-engine:
-    image: ${VLLM_IMAGE}
-    runtime: nvidia
+    image: ${VLLM_IMAGE:-ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin}
+    network_mode: host
     shm_size: "16g"
-    ports:
-      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
-      - HF_TOKEN=${HF_TOKEN:-}
-      # Point HF cache at the pre-downloaded model weights if available
-      - HF_HOME=/data/models/huggingface
-      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
-      - HF_DATASETS_OFFLINE=${HF_DATASETS_OFFLINE:-1}
-      - VLLM_MODEL=${VLLM_MODEL}
-      - VLLM_SERVED_MODEL_NAME=${VLLM_SERVED_MODEL_NAME}
-      - VLLM_GPU_MEMORY_UTILIZATION=${VLLM_GPU_MEMORY_UTILIZATION}
-      - VLLM_EXTRA_ARGS=${VLLM_EXTRA_ARGS}
+      - VLLM_MODEL=${VLLM_MODEL:-stelterlab/NVIDIA-Nemotron-3-Nano-30B-A3B-AWQ}
+      - VLLM_SERVED_MODEL_NAME=${VLLM_SERVED_MODEL_NAME:-nvidia/nemotron-3-nano-30b-a3b}
+      - VLLM_GPU_MEMORY_UTILIZATION=${VLLM_GPU_MEMORY_UTILIZATION:-0.75}
+      - VLLM_EXTRA_ARGS=${VLLM_EXTRA_ARGS:-}
     volumes:
-      - ./models:/data/models
+      - /data/models:/root/.cache/huggingface
       - ~/.cache/huggingface:/root/.cache/huggingface
       - ./patches/gemma4_patch.py:/opt/venv/lib/python3.10/site-packages/vllm/model_executor/models/gemma4.py
     command: ["bash", "-c", "vllm serve $$VLLM_MODEL --served-model-name $$VLLM_SERVED_MODEL_NAME --gpu-memory-utilization $$VLLM_GPU_MEMORY_UTILIZATION $$VLLM_EXTRA_ARGS --port 8000"]
     restart: unless-stopped
 
-  zeroclaw:
+  # THE OPERATOR AGENT (Supervised, General Access)
+  zeroclaw-operator:
     build:
       context: ./stack/zeroclaw
     image: zeroclaw:latest
-    ports:
-      - "42617:42617"
+    network_mode: host
     environment:
       - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
       - ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
@@ -45,10 +43,34 @@ services:
       - ZEROCLAW_GATEWAY_PORT=42617
       - ZEROCLAW_NO_SANDBOX=1
     volumes:
-      - ./.zeroclaw:/zeroclaw-data/.zeroclaw
-      - ./workspace:/zeroclaw-data/workspace
+      - ./.zeroclaw-operator:/zeroclaw-data/.zeroclaw
+      - ./.zeroclaw-operator/workspace:/zeroclaw-data/workspace
+    restart: unless-stopped
+    depends_on:
+      - reasoning-engine
+      - browser-node
+      - jetson-telemetry
+
+  # THE ADMIN AGENT (Autonomous, Privileged Access)
+  zeroclaw-admin:
+    build:
+      context: ./stack/zeroclaw
+    image: zeroclaw:latest
+    network_mode: host
+    environment:
+      - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
+      - ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
+      - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-vllm}
+      - DEFAULT_MODEL=${VLLM_SERVED_MODEL_NAME:-nvidia/nemotron-3-nano-30b-a3b}
+      - ZEROCLAW_GATEWAY_PORT=42618
+      - ZEROCLAW_NO_SANDBOX=1
+    volumes:
+      - ./.zeroclaw-admin:/zeroclaw-data/.zeroclaw
+      - ./.zeroclaw-admin/workspace:/zeroclaw-data/workspace
+      - ~/.zeroclaw/ssh:/home/lhzn/.ssh
+      - ./configs/admin-index.html:/zeroclaw-data/web/dist/index.html:ro
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "karone.local:10.219.100.19"
     restart: unless-stopped
     depends_on:
       - reasoning-engine
@@ -72,10 +94,8 @@ services:
       - "8765:8765"
     environment:
       - MCP_TRANSPORT=sse
-      - PORT=8765
     volumes:
       - /sys:/sys:ro
-      - /var/lib/nvpmodel/status:/var/lib/nvpmodel/status:ro
       - /usr/bin/tegrastats:/usr/bin/tegrastats:ro
       - /usr/sbin/nvpmodel:/usr/sbin/nvpmodel:ro
       - /usr/bin/jetson_clocks:/usr/bin/jetson_clocks:ro

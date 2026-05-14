@@ -30,8 +30,8 @@ import sys
 import time
 import urllib.request
 
-CONTAINER = os.environ.get("ZEROCLAW_CONTAINER", "uplift-zeroclaw-1")
-INFERENCE_URL = os.environ.get("INFERENCE_URL", "http://127.0.0.1:8000")
+CONTAINER = os.environ.get("ZEROCLAW_CONTAINER", "uplift-zeroclaw-operator-1")
+INFERENCE_URL = os.environ.get("INFERENCE_URL", "http://127.0.0.1:8100")
 MODEL = os.environ.get("VLLM_SERVED_MODEL_NAME", "gemma-4-26b-a4b")
 
 # Prompt designed to *require* the deferred web_search tool. Naming the tool

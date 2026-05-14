@@ -1,25 +1,23 @@
 #!/usr/bin/env bash
-# tests/test_02_zeroclaw.sh — zeroclaw gateway checks
-# Verifies the zeroclaw layer is healthy after boot/recovery.
+# tests/test_02_zeroclaw.sh — zeroclaw agent checks
+# Verifies both Operator and Admin agents are healthy.
 set -euo pipefail
 source "$(dirname "$0")/lib/common.sh"
 
-suite "zeroclaw-control-plane"
+suite "zeroclaw-agents"
 
-# --- CLI available ---
-if require_cmd zeroclaw; then
-    pass "zeroclaw CLI in PATH"
+# --- Operator Agent status ---
+if docker compose exec zeroclaw-operator zeroclaw status >/dev/null 2>&1; then
+    pass "Operator Agent status returns OK"
 else
-    skip "zeroclaw CLI in PATH" "not installed — run scripts/install_zeroclaw.sh"
-    suite_done
-    exit $?
+    fail "Operator Agent status returns OK" "container might be down or unreachable"
 fi
 
-# --- Gateway daemon status ---
-if zeroclaw status >/dev/null 2>&1; then
-    pass "zeroclaw status returns OK"
+# --- Admin Agent status ---
+if docker compose exec zeroclaw-admin zeroclaw status >/dev/null 2>&1; then
+    pass "Admin Agent status returns OK"
 else
-    fail "zeroclaw status returns OK" "daemon might be down or unreachable"
+    fail "Admin Agent status returns OK" "container might be down or unreachable"
 fi
 
 suite_done
