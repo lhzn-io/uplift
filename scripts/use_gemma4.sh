@@ -11,14 +11,18 @@ else
     touch .env.tmp
 fi
 
-cat << 'ENVEOF' >> .env.tmp
-VLLM_IMAGE=ghcr.io/nvidia-ai-iot/vllm:gemma4-jetson-orin
-VLLM_MODEL=cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit
-VLLM_SERVED_MODEL_NAME=gemma-4-26b-a4b
-VLLM_GPU_MEMORY_UTILIZATION=0.8
-VLLM_EXTRA_ARGS="--enable-auto-tool-choice --reasoning-parser gemma4 --tool-call-parser gemma4 --quantization compressed-tensors"
-TRANSFORMERS_OFFLINE=0
-HF_DATASETS_OFFLINE=0
+# Source env.sh to get model identifiers
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh" gemma4
+
+cat << ENVEOF >> .env.tmp
+VLLM_IMAGE=${VLLM_IMAGE}
+VLLM_MODEL=${GEMMA4_REPO}
+VLLM_SERVED_MODEL_NAME=${VLLM_SERVED_MODEL_NAME}
+VLLM_GPU_MEMORY_UTILIZATION=${VLLM_GPU_MEMORY_UTILIZATION}
+VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS} --quantization compressed-tensors"
+HF_HUB_OFFLINE=${HF_HUB_OFFLINE}
+TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE}
+HF_DATASETS_OFFLINE=${HF_DATASETS_OFFLINE}
 ENVEOF
 
 mv .env.tmp .env

@@ -178,6 +178,43 @@ else
   echo "/!\\ Warning: Stack verified with ${FAILS} failure(s). The UI might be degraded."
 fi
 
+# Check for model updates (non-blocking)
+echo "==> Checking for model updates (HuggingFace Hub)"
+UPDATE_NOTICE=""
+if ! python3 -c "
+import urllib.request
+import json
+import os
+import sys
+
+def check():
+    try:
+        repo = os.environ.get('GEMMA4_REPO')
+        current = os.environ.get('GEMMA4_SNAPSHOT')
+        if not repo or not current:
+            return False
+        
+        url = f'https://huggingface.co/api/models/{repo}'
+        with urllib.request.urlopen(url, timeout=3) as r:
+            latest = json.loads(r.read().decode()).get('sha')
+            if latest and latest != current:
+                print(latest)
+                return True
+    except:
+        pass
+    return False
+
+if not check():
+    sys.exit(1)
+" 2>/dev/null > .hf_latest; then
+    echo "    no updates or HF Hub unreachable"
+else
+    LATEST_SHA=$(cat .hf_latest)
+    UPDATE_NOTICE="[NOTICE] Model update available for Gemma-4: ${LATEST_SHA}"
+    echo "    ${UPDATE_NOTICE}"
+    rm .hf_latest
+fi
+
 # Get tokens from both agents if possible
 OP_TOKEN=$(docker compose -f "${ROOT_DIR}/docker-compose.yml" exec zeroclaw-operator zeroclaw gateway list-paired-tokens 2>/dev/null | grep -v "2026-" | head -n 1 || true)
 ADMIN_TOKEN=$(docker compose -f "${ROOT_DIR}/docker-compose.yml" exec zeroclaw-admin zeroclaw gateway list-paired-tokens 2>/dev/null | grep -v "2026-" | head -n 1 || true)

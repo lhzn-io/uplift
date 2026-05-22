@@ -3,7 +3,7 @@
 How to clone, build, run, interact with, and reset the Uplift stack on
 a Jetson Orin AGX. For the strategic framing of the project see
 [`../README.md`](../README.md); for the methodological backbone see
-[`methodology.md`](methodology.md).
+[`methodology.md`](methodology.md). See [**Model Update Workflow**](model-updates.md) for handling snapshots in offline mode.
 
 ## Why the stack uses forks
 

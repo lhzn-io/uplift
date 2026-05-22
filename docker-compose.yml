@@ -22,9 +22,11 @@ services:
       - VLLM_SERVED_MODEL_NAME=${VLLM_SERVED_MODEL_NAME:-nvidia/nemotron-3-nano-30b-a3b}
       - VLLM_GPU_MEMORY_UTILIZATION=${VLLM_GPU_MEMORY_UTILIZATION:-0.75}
       - VLLM_EXTRA_ARGS=${VLLM_EXTRA_ARGS:-}
+      - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
+      - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
+      - HF_DATASETS_OFFLINE=${HF_DATASETS_OFFLINE:-1}
     volumes:
-      - /data/models:/root/.cache/huggingface
-      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ${REASONING_ENGINE_DIR:-/home/lhzn/.cache/huggingface}:/data/models/huggingface
       - ./patches/gemma4_patch.py:/opt/venv/lib/python3.10/site-packages/vllm/model_executor/models/gemma4.py
     command: ["bash", "-c", "vllm serve $$VLLM_MODEL --served-model-name $$VLLM_SERVED_MODEL_NAME --gpu-memory-utilization $$VLLM_GPU_MEMORY_UTILIZATION $$VLLM_EXTRA_ARGS --port 8000"]
     restart: unless-stopped

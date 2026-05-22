@@ -21,13 +21,17 @@ if [ "${MODEL_CHOICE}" = "nemotron" ]; then
     export VLLM_GPU_MEMORY_UTILIZATION="0.75"
     export VLLM_EXTRA_ARGS="--max-model-len 65536 --enable-auto-tool-choice --tool-call-parser qwen3_coder --reasoning-parser-plugin /data/models/nemotron-30b-fp8/nano_v3_reasoning_parser.py --reasoning-parser nano_v3 --default-chat-template-kwargs {\"enable_thinking\":false}"
 elif [ "${MODEL_CHOICE}" = "gemma4" ]; then
+    export GEMMA4_REPO="cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit"
+    export GEMMA4_SNAPSHOT="4033b16200f4152e55e100ea12dc388c537df622"
+    
     export VLLM_IMAGE="ghcr.io/nvidia-ai-iot/vllm:gemma4-jetson-orin"
-    export VLLM_MODEL="cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit"
+    export VLLM_MODEL="${GEMMA4_REPO}"
     export VLLM_SERVED_MODEL_NAME="gemma-4-26b-a4b"
     export VLLM_GPU_MEMORY_UTILIZATION="0.8"
     export VLLM_EXTRA_ARGS="--enable-auto-tool-choice --reasoning-parser gemma4 --tool-call-parser gemma4 "
-    export TRANSFORMERS_OFFLINE=0
-    export HF_DATASETS_OFFLINE=0
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+    export HF_DATASETS_OFFLINE=1
 else
     printf 'scripts/env.sh: unknown MODEL_CHOICE %q (expected gemma4|nemotron)\n' "${MODEL_CHOICE}" >&2
     return 1 2>/dev/null || exit 1
