@@ -45,7 +45,7 @@ fi
 
 if [ "$is_running" = false ]; then
     log "Freeing memory/caches before boot..."
-    # sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
+    sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
 
     log "Starting sovereign stack reasoning-engine via Docker Compose..."
     echo ""
@@ -71,7 +71,7 @@ if [ "$is_running" = false ]; then
     docker compose up -d browser-node jetson-telemetry
 
     log "Starting zeroclaw..."
-    docker compose up -d zeroclaw
+    docker compose up -d zeroclaw-operator zeroclaw-admin
 fi
 
 echo ""
