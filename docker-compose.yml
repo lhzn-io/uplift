@@ -25,9 +25,12 @@ services:
       - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
       - TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
       - HF_DATASETS_OFFLINE=${HF_DATASETS_OFFLINE:-1}
+      - HF_TOKEN=${HF_TOKEN}
     volumes:
       - ${REASONING_ENGINE_DIR:-/home/lhzn/.cache/huggingface}:/data/models/huggingface
       - ./patches/gemma4_patch.py:/opt/venv/lib/python3.10/site-packages/vllm/model_executor/models/gemma4.py
+      - ./patches/gemma4_mm_patch.py:/opt/venv/lib/python3.10/site-packages/vllm/model_executor/models/gemma4_mm.py
+      - ./patches/fused_moe_patch.py:/opt/venv/lib/python3.10/site-packages/vllm/lora/layers/fused_moe.py
     command: ["bash", "-c", "vllm serve $$VLLM_MODEL --served-model-name $$VLLM_SERVED_MODEL_NAME --gpu-memory-utilization $$VLLM_GPU_MEMORY_UTILIZATION $$VLLM_EXTRA_ARGS --port 8000"]
     restart: unless-stopped
 
@@ -36,6 +39,7 @@ services:
     build:
       context: ./stack/zeroclaw
     image: zeroclaw:latest
+    user: "root"
     network_mode: host
     environment:
       - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
@@ -47,6 +51,9 @@ services:
     volumes:
       - ./.zeroclaw-operator:/zeroclaw-data/.zeroclaw
       - ./.zeroclaw-operator/workspace:/zeroclaw-data/workspace
+      - ./scripts/zeroclaw_entrypoint.sh:/usr/local/bin/zeroclaw_entrypoint.sh:ro
+    entrypoint: ["/usr/local/bin/zeroclaw_entrypoint.sh"]
+    command: ["daemon"]
     restart: unless-stopped
     depends_on:
       - reasoning-engine
@@ -58,6 +65,7 @@ services:
     build:
       context: ./stack/zeroclaw
     image: zeroclaw:latest
+    user: "root"
     network_mode: host
     environment:
       - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
@@ -71,6 +79,9 @@ services:
       - ./.zeroclaw-admin/workspace:/zeroclaw-data/workspace
       - ~/.zeroclaw/ssh:/home/lhzn/.ssh
       - ./configs/admin-index.html:/zeroclaw-data/web/dist/index.html:ro
+      - ./scripts/zeroclaw_entrypoint.sh:/usr/local/bin/zeroclaw_entrypoint.sh:ro
+    entrypoint: ["/usr/local/bin/zeroclaw_entrypoint.sh"]
+    command: ["daemon"]
     extra_hosts:
       - "karone.local:10.219.100.19"
     restart: unless-stopped

@@ -28,16 +28,34 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
-    #[test]
-    fn test_naive_ate_stub() {
-        let r1 = TraceRecord {
+    fn sample_record() -> TraceRecord {
+        TraceRecord {
             schema_version: SCHEMA_VERSION,
             id: Uuid::new_v4(),
             timestamp_utc: Utc::now(),
-            kind: TraceKind::AgentState { state_json: "{}".to_string() },
+            kind: TraceKind::Turn,
             session_id: Uuid::new_v4(),
             turn_id: Uuid::new_v4(),
-        };
+            treatment: None,
+            operator_id: None,
+            task_cohort: None,
+            provider: "test-provider".into(),
+            model: "test-model".into(),
+            input_tokens: None,
+            output_tokens: None,
+            latency_ms: 100,
+            tool_calls: vec![],
+            n_llm_requests: None,
+            success: true,
+            error: None,
+            outcomes: serde_json::Value::Null,
+            metadata: serde_json::Value::Null,
+        }
+    }
+
+    #[test]
+    fn test_naive_ate_stub() {
+        let r1 = sample_record();
         let records = vec![r1];
         let effect = naive_ate(&records, |_| 1.0, |_| true);
         assert_eq!(effect.ate, 0.0);

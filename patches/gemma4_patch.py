@@ -1079,6 +1079,16 @@ class Gemma4Model(nn.Module):
 
 
 class Gemma4ForCausalLM(nn.Module, SupportsLoRA, SupportsPP, MixtureOfExperts):
+
+    def get_expert_mapping(self) -> list[tuple[str, str, int, str]]:
+        from vllm.model_executor.layers.fused_moe import FusedMoE
+        return FusedMoE.make_expert_params_mapping(
+            self,
+            ckpt_gate_proj_name="gate_proj",
+            ckpt_down_proj_name="down_proj",
+            ckpt_up_proj_name="up_proj",
+            num_experts=self.config.num_experts,
+        )
     # Note: qkv_proj packing applies to non-k_eq_v layers (sliding
     # attention and full attention without k_eq_v). k_eq_v layers use
     # separate q_proj + k_proj without packing.

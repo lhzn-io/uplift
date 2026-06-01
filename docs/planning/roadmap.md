@@ -70,6 +70,12 @@ sake.
 The base measurement pipeline is active. The next iteration focuses on actual 
 engagement metrics, deeper model integration, and workflow capabilities:
 
+- **Decant Aquaculture Expert Model.** Upgrade the `reasoning-engine` from default to `lhzn-io/imta-expert-gemma4-26b-a4b-it-awq` (an aquaculture expert model).
+  - *Shipped*: 48.1 GB model weights consolidated into standard global cache path under `/home/lhzn/.cache/huggingface`.
+  - *Shipped*: Bypassed vLLM `AttributeError` by mounting `patches/gemma4_patch.py` and `patches/gemma4_mm_patch.py` to mock `"vision_config"` and enable LoRA on multimodal Gemma 4 architectures.
+  - *Shipped*: Resolved Marlin MoE loader constraint (`AssertionError: Only symmetric quantization is supported for MoE`) by applying standard MoE Marlin assertion bypass in `patches/fused_moe_patch.py` and configuring Triton MoE backend (`--moe-backend triton`) in `docker-compose.yml` environment.
+  - *Shipped*: Integrated `scripts/zeroclaw_entrypoint.sh` to dynamically register the decanted expert model choices in the ZeroClaw Web UI.
+
 ## Later (v0.3+)
 
 - **Literature review populated.** Sections §§1–6 of
