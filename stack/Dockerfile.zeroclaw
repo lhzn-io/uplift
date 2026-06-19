@@ -1,0 +1,25 @@
+# Custom parent-level Dockerfile for ZeroClaw with Python 3 support on Ubuntu 24.04
+FROM ubuntu:24.04
+
+# Basic runtime dependencies including python3 and adduser for skill execution
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        python3 \
+        adduser \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the locally compiled artifacts
+COPY target/release-fast/zeroclaw /usr/local/bin/zeroclaw
+
+ENV ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
+ENV HOME=/zeroclaw-data
+
+# Run as UID 1000 so the host-mounted files strictly match the Jetson 'lhzn' host permissions
+RUN adduser --disabled-password --gecos "" --uid 1000 lhzn
+USER 1000:1000
+
+WORKDIR /zeroclaw-data
+EXPOSE 42617
+ENTRYPOINT ["zeroclaw"]
+CMD ["daemon"]

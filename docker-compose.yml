@@ -38,6 +38,7 @@ services:
   zeroclaw-operator:
     build:
       context: ./stack/zeroclaw
+      dockerfile: ../Dockerfile.zeroclaw
     image: zeroclaw:latest
     user: "root"
     network_mode: host
@@ -64,6 +65,7 @@ services:
   zeroclaw-admin:
     build:
       context: ./stack/zeroclaw
+      dockerfile: ../Dockerfile.zeroclaw
     image: zeroclaw:latest
     user: "root"
     network_mode: host
