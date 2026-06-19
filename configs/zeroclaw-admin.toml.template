@@ -292,7 +292,8 @@ max_response_size = 1000000
 timeout_secs = 30
 
 [identity]
-format = "zeroclaw"
+format = "aieos"
+aieos_path = "/zeroclaw-data/.zeroclaw/identity.json"
 
 [image_gen]
 api_key_env = "FAL_API_KEY"

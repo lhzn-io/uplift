@@ -33,7 +33,7 @@ bootstrap_agent() {
     local workspace_dir="${target_dir}/workspace"
     local template="configs/zeroclaw-${tier}.toml.template"
     
-    echo "--- Bootstrapping ${tier^} Agent ---"
+    echo "--- Bootstrapping ${tier} Agent ---"
     
     # 1. Create directories
     mkdir -p "${workspace_dir}"
@@ -42,16 +42,9 @@ bootstrap_agent() {
     echo "Templating config into ${target_dir}/config.toml..."
     envsubst "$SUBST_VARS" < "${WORKSPACE_ROOT}/${template}" > "${target_dir}/config.toml"
     
-    # 3. Initialize workspace documents from bootstrap templates
-    # (We only copy Markdown files to avoid clobbering databases/state)
-    echo "Initializing workspace documents..."
-    cp "${WORKSPACE_ROOT}/configs/bootstrap/IDENTITY.md" "${workspace_dir}/"
-    cp "${WORKSPACE_ROOT}/configs/bootstrap/USER.md"     "${workspace_dir}/"
-    cp "${WORKSPACE_ROOT}/configs/bootstrap/AGENTS.md"   "${workspace_dir}/"
-    cp "${WORKSPACE_ROOT}/configs/bootstrap/TOOLS.md"    "${workspace_dir}/"
-    
-    # Tier-specific soul
-    cp "${WORKSPACE_ROOT}/configs/bootstrap/SOUL-${tier}.md" "${workspace_dir}/SOUL.md"
+    # 3. Copy AIEOS identity profile to config mount directory
+    echo "Copying AIEOS identity configuration..."
+    cp "${WORKSPACE_ROOT}/configs/bootstrap/identity-${tier}.json" "${target_dir}/identity.json"
 }
 
 # Run bootstrap for both tiers
