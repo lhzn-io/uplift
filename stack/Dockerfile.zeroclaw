@@ -15,6 +15,9 @@ COPY target/release-fast/zeroclaw /usr/local/bin/zeroclaw
 ENV ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
 ENV HOME=/zeroclaw-data
 
+# Delete the default 'ubuntu' user (UID 1000) to avoid conflict
+RUN userdel ubuntu
+
 # Run as UID 1000 so the host-mounted files strictly match the Jetson 'lhzn' host permissions
 RUN adduser --disabled-password --gecos "" --uid 1000 lhzn
 USER 1000:1000
