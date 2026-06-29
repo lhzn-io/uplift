@@ -117,13 +117,14 @@ sudo reboot
 
 ```bash
 ./stop_stack.sh
-./start_stack.sh --model gemma4    # default — Gemma4-26B-A4B
-./start_stack.sh --model nemotron  # alternate — Nemotron-3-Nano-30B-A3B
+./start_stack.sh --model gemma4-26b-a4b      # default — Gemma4-26B-A4B
+./start_stack.sh --model gemma4-12b          # alternate — Gemma4-12B
+./start_stack.sh --model nemotron3-30b-a3b   # alternate — Nemotron-3-Nano
 ```
 
 Under the hood:
 
-- [scripts/use_gemma4.sh](scripts/use_gemma4.sh) / [scripts/use_nemotron.sh](scripts/use_nemotron.sh) rewrite the `VLLM_*` block in `.env`
+- [scripts/use_model.sh](scripts/use_model.sh) rewrites the `VLLM_*` block in `.env`
 - `start_stack.sh` brings up the matching vLLM image (`ghcr.io/nvidia-ai-iot/vllm:gemma4-jetson-orin` vs `:latest-jetson-orin`) and waits for the model to load
 - The zeroclaw container reads `VLLM_SERVED_MODEL_NAME` via `DEFAULT_MODEL` env
 
@@ -186,7 +187,7 @@ curl -fsS http://127.0.0.1:8100/v1/models    # capability proxy
 
 ### `reasoning-engine` first start takes forever
 
-Expected on a fresh model. Gemma4 / Nemotron weights have to be downloaded (if not pre-placed) and loaded onto the GPU. `start_stack.sh` waits up to 7 minutes for `:8000/v1/models` to respond before giving up and starting zeroclaw anyway. If it consistently times out, check `docker logs reasoning-engine` for HuggingFace download progress or AWQ load errors.
+Expected on a fresh model. Model weights have to be downloaded (if not pre-placed) and loaded onto the GPU. `start_stack.sh` waits up to 7 minutes for `:8000/v1/models` to respond before giving up and starting zeroclaw anyway. If it consistently times out, check `docker logs reasoning-engine` for HuggingFace download progress or AWQ load errors.
 
 ### zeroclaw container restarts in a loop
 

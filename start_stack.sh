@@ -15,10 +15,10 @@ die()  { printf '\n[ERROR] %s\n' "$*" >&2; exit 1; }
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --model) 
-            if [ "$2" = "gemma4" ] || [ "$2" = "nemotron" ]; then
-                "${SCRIPT_DIR}/scripts/use_$2.sh"
+            if [ -n "${2:-}" ]; then
+                "${SCRIPT_DIR}/scripts/use_model.sh" "$2"
             else
-                die "Unknown model choice: $2"
+                die "--model requires an argument"
             fi
             shift ;;
         *) die "Unknown parameter passed: $1" ;;
@@ -29,7 +29,7 @@ done
 # Ensure .env is populated with *some* defaults if it doesn't have VLLM_IMAGE
 if ! grep -q "^VLLM_IMAGE=" "${SCRIPT_DIR}/.env" 2>/dev/null; then
     log "No model configuration found in .env, defaulting to Gemma4."
-    "${SCRIPT_DIR}/scripts/use_gemma4.sh"
+    "${SCRIPT_DIR}/scripts/use_model.sh" gemma4-26b-a4b
 fi
 
 # ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ fi
 
 if [ "$is_running" = false ]; then
     log "Freeing memory/caches before boot..."
-    sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
+    sync && (echo 3 | sudo -n tee /proc/sys/vm/drop_caches > /dev/null 2>&1 || warn "Could not drop caches (non-fatal)")
 
     log "Starting sovereign stack reasoning-engine via Docker Compose..."
     echo ""

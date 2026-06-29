@@ -51,8 +51,10 @@ for a cold build on Orin AGX, ~1–2 minutes for incremental changes.
 ## Starting the stack
 
 ```bash
-./start_stack.sh                    # Gemma4-26B-A4B (default)
-./start_stack.sh --model nemotron   # Nemotron-3-Nano-30B-A3B
+./start_stack.sh --model gemma4-26b-a4b      # Gemma4-26B-A4B (default)
+./start_stack.sh --model gemma4-12b          # Gemma4-12B
+./start_stack.sh --model nemotron3-30b-a3b   # Nemotron-3-Nano
+
 ```
 
 `start_stack.sh`:

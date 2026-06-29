@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy the locally compiled artifacts
 COPY target/release-fast/zeroclaw /usr/local/bin/zeroclaw
+COPY web/dist /zeroclaw-data/web/dist
 
 ENV ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
 ENV HOME=/zeroclaw-data

@@ -5,7 +5,7 @@
 #
 
 services:
-  # THE BRAIN: Nemotron-3-Nano-30B-A3B (via vLLM)
+  # THE BRAIN: Gemma 4 26B A4B (via vLLM)
   reasoning-engine:
     image: ${VLLM_IMAGE:-ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin}
     network_mode: host
@@ -18,8 +18,8 @@ services:
               count: 1
               capabilities: [gpu]
     environment:
-      - VLLM_MODEL=${VLLM_MODEL:-stelterlab/NVIDIA-Nemotron-3-Nano-30B-A3B-AWQ}
-      - VLLM_SERVED_MODEL_NAME=${VLLM_SERVED_MODEL_NAME:-nvidia/nemotron-3-nano-30b-a3b}
+      - VLLM_MODEL=${VLLM_MODEL:-cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit}
+      - VLLM_SERVED_MODEL_NAME=${VLLM_SERVED_MODEL_NAME:-gemma-4-26b-a4b}
       - VLLM_GPU_MEMORY_UTILIZATION=${VLLM_GPU_MEMORY_UTILIZATION:-0.75}
       - VLLM_EXTRA_ARGS=${VLLM_EXTRA_ARGS:-}
       - HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
@@ -46,7 +46,7 @@ services:
       - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
       - ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
       - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-vllm}
-      - DEFAULT_MODEL=${VLLM_SERVED_MODEL_NAME:-nvidia/nemotron-3-nano-30b-a3b}
+      - ZEROCLAW_MODEL=${VLLM_SERVED_MODEL_NAME:-gemma-4-26b-a4b}
       - ZEROCLAW_GATEWAY_PORT=42617
       - ZEROCLAW_NO_SANDBOX=1
     volumes:
@@ -73,12 +73,13 @@ services:
       - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
       - ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
       - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-vllm}
-      - DEFAULT_MODEL=${VLLM_SERVED_MODEL_NAME:-nvidia/nemotron-3-nano-30b-a3b}
+      - ZEROCLAW_MODEL=${VLLM_SERVED_MODEL_NAME:-gemma-4-26b-a4b}
       - ZEROCLAW_GATEWAY_PORT=42618
       - ZEROCLAW_NO_SANDBOX=1
     volumes:
       - ./.zeroclaw-admin:/zeroclaw-data/.zeroclaw
       - ./.zeroclaw-admin/workspace:/zeroclaw-data/workspace
+      - ./.zeroclaw-operator/workspace:/zeroclaw-data/operator_workspace
       - ~/.zeroclaw/ssh:/home/lhzn/.ssh
       - ./configs/admin-index.html:/zeroclaw-data/web/dist/index.html:ro
       - ./scripts/zeroclaw_entrypoint.sh:/usr/local/bin/zeroclaw_entrypoint.sh:ro

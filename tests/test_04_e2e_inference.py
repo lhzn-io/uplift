@@ -31,7 +31,7 @@ def grab_active_model():
                 return data["data"][0]["id"]
     except Exception:
         pass
-    return "nvidia/nemotron-3-nano-30b-a3b"
+    return "gemma-4-26b-a4b"
 
 MODEL = os.environ.get("VLLM_SERVED_MODEL_NAME") or grab_active_model()
 TIMEOUT = int(os.environ.get("INFERENCE_TIMEOUT", "60"))
@@ -145,7 +145,7 @@ def post_stream(path: str, body: dict, timeout: int = TIMEOUT) -> tuple[list[str
 def pick_message_text(resp: dict) -> str:
     """Extract response text from vLLM/OpenAI-compatible payloads.
 
-    Nemotron responses may place useful text under `reasoning_content`
+    Gemma 4 responses may place useful text under `reasoning_content`
     while `content` can be null/empty.
     """
     try:

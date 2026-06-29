@@ -11,8 +11,7 @@ sake.
 ### v0.1 — bootstrap
 
 - **Sovereign inference default.** Single-node vLLM with Gemma4-26B as
-  default, Nemotron-3-Nano as an opt-in (`./start_stack.sh --model
-  nemotron`). Config template, env helper, and docker-compose all
+  default, with Gemma4-12B and Nemotron-3-Nano as options (via `./start_stack.sh --model <alias>`). Config template, env helper, and docker-compose all
   driven from a single source of truth at
   [`scripts/env.sh`](../../scripts/env.sh).
 - **Trim pass on the agent prompt.** System-prompt tokens per turn

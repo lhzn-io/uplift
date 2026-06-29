@@ -35,7 +35,7 @@ The stack runs as a Docker Compose project on a Jetson host.
 
 ```text
 docker-compose.yml
-  ├── reasoning-engine    vLLM (Gemma4/Nemotron)                      [GPU]
+  ├── reasoning-engine    vLLM (Gemma4-26B/Gemma4-12B/Nemotron3)      [GPU]
   ├── zeroclaw            Agent + Dashboard                           [:42617]
   ├── browser-node        Selenium Chromium (Reference Implementation) [:4444]
   └── jetson-telemetry    MCP Server (Pattern Example)                [:8765]
@@ -70,7 +70,7 @@ Configures power modes, swap, and Docker for the Jetson Orin.
 ```bash
 ./start_stack.sh
 ```
-This defaults to Gemma4. Use `--model nemotron` to swap. The script handles model loading, proxy startup, and service orchestration.
+This defaults to Gemma4-26B. The script handles model loading, proxy startup, and service orchestration.
 
 ### 3. Verification
 ```bash
@@ -114,9 +114,15 @@ To stop everything:
 ## Development & Reset
 
 ### Switching Models
+You can configure the active served model using the model configurator script:
 ```bash
-./stop_stack.sh
-./start_stack.sh --model nemotron
+./scripts/use_model.sh gemma4-26b-a4b        # Gemma-4-26B (default)
+./scripts/use_model.sh gemma4-12b            # Gemma-4-12B
+./scripts/use_model.sh nemotron3-30b-a3b      # Nemotron-3-Nano
+```
+Or pass full Hugging Face repository paths directly:
+```bash
+./start_stack.sh --model cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit
 ```
 The model choice is persisted in `.env`.
 
