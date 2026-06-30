@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/badge/license-Apache_2.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Jetson%20Orin%20AGX-76b900?logo=nvidia&logoColor=white)
-![JetPack](https://img.shields.io/badge/JetPack-6.2.2-76b900?logo=nvidia&logoColor=white)
+![JetPack](https://img.shields.io/badge/JetPack-6.2.2%20%7C%207.2-76b900?logo=nvidia&logoColor=white)
 ![Model](https://img.shields.io/badge/model-Gemma4--26B--A4B-00c4cc)
 
 Uplift is a sovereign edge platform for deploying autonomous agents into the field and measuring, causally, how much they actually lever up human operators. 

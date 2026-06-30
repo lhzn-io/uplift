@@ -1,6 +1,6 @@
 # Uplift Installation
 
-Optimized for NVIDIA Jetson Orin AGX on JetPack 6.x. The [README](README.md) covers the day-to-day operator path; this document details the host provisioning, build process, and troubleshooting.
+Optimized for NVIDIA Jetson Orin AGX on JetPack 6.x and JetPack 7.2. The [README](README.md) covers the day-to-day operator path; this document details the host provisioning, build process, and troubleshooting.
 
 ## 1. Host Provisioning
 

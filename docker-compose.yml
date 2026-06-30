@@ -10,13 +10,7 @@ services:
     image: ${VLLM_IMAGE:-ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin}
     network_mode: host
     shm_size: "16g"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    runtime: nvidia
     environment:
       - VLLM_MODEL=${VLLM_MODEL:-cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit}
       - VLLM_SERVED_MODEL_NAME=${VLLM_SERVED_MODEL_NAME:-gemma-4-26b-a4b}

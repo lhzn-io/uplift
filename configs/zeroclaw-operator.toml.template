@@ -362,7 +362,7 @@ model = "stable-diffusion-xl-1024-v1-0"
 deferred_loading = true
 enabled = true
 servers = [
-    { name = "jetson-telemetry-mcp", transport = "sse", url = "http://jetson-telemetry:8765/sse", tool_timeout_secs = 60 },
+    { name = "jetson-telemetry-mcp", transport = "sse", url = "http://127.0.0.1:8765/sse", tool_timeout_secs = 60 },
 ]
 
 [media_pipeline]
