@@ -1,0 +1,8 @@
+# Pinned to the minimum Rust version declared by upstream ZeroClaw v0.8.5
+# (rust-version in its Cargo.toml). rustup finds this file from any directory
+# below the repository root, including stack/zeroclaw, so the uplift crates and
+# the ZeroClaw build use the same compiler on the Jetson and on a workstation.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
