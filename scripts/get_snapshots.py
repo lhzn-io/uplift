@@ -2,8 +2,10 @@
 import os
 import sys
 
+HF_CACHE = os.path.expanduser("~/.cache/huggingface")
+
 def get_latest_snapshot(repo_name):
-    for base in ["/home/lhzn/.cache/huggingface/hub", "/home/lhzn/.cache/huggingface"]:
+    for base in [os.path.join(HF_CACHE, "hub"), HF_CACHE]:
         repo_dir = os.path.join(base, f"models--{repo_name.replace('/', '--')}")
         snapshots_dir = os.path.join(repo_dir, "snapshots")
         if os.path.exists(snapshots_dir):
@@ -31,7 +33,7 @@ def main():
     print("=" * 70)
     print("COPY AND PASTE THE FOLLOWING LINES DIRECTLY INTO YOUR .env FILE:")
     print("=" * 70)
-    print("REASONING_ENGINE_DIR=/home/lhzn/.cache/huggingface")
+    print(f"REASONING_ENGINE_DIR={HF_CACHE}")
     print(f"VLLM_MODEL={base_container_path}")
     print("VLLM_SERVED_MODEL_NAME=gemma-4-26b-a4b")
     

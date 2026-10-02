@@ -16,12 +16,19 @@ COPY web/dist /zeroclaw-data/web/dist
 ENV ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
 ENV HOME=/zeroclaw-data
 
-# Delete the default 'ubuntu' user (UID 1000) to avoid conflict
-RUN userdel ubuntu
-
-# Run as UID 1000 so the host-mounted files strictly match the Jetson 'lhzn' host permissions
-RUN adduser --disabled-password --gecos "" --uid 1000 lhzn
-USER 1000:1000
+# Run as the host account that owns the bind-mounted state directories, so the
+# agents never need root. The Jetson account is 'uplift' (UID/GID 2002) since the
+# September 2026 reflash; override with --build-arg on a host that differs.
+# /zeroclaw-data is chowned because zeroclaw_entrypoint.sh patches the web
+# bundle in place at startup.
+ARG UID=2002
+ARG GID=2002
+RUN userdel ubuntu \
+    && addgroup --gid ${GID} uplift \
+    && adduser --disabled-password --gecos "" --uid ${UID} --gid ${GID} \
+         --home /zeroclaw-data --no-create-home uplift \
+    && chown -R ${UID}:${GID} /zeroclaw-data
+USER ${UID}:${GID}
 
 WORKDIR /zeroclaw-data
 EXPOSE 42617

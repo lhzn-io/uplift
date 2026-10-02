@@ -103,7 +103,7 @@ Useful for quick smoke tests:
 docker exec uplift-zeroclaw-operator-1 zeroclaw agent -m "GPU temp?"
 
 # Messaging the Admin
-docker exec uplift-zeroclaw-admin-1 zeroclaw agent -m "Check status of karone.local"
+docker exec uplift-zeroclaw-admin-1 zeroclaw agent -m "Check status of <remote-host>"
 ```
 
 ### Over Slack

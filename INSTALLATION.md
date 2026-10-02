@@ -19,16 +19,30 @@ sudo reboot
 - **Docker NVIDIA runtime**: Configures `nvidia-ctk` and cgroups.
 - **Networking**: Configures `br_netfilter` and pins `iptables-legacy` (required for JetPack 6).
 
+### Development Toolchain
+
+To build ZeroClaw on the Jetson (the host-based build protocol), bootstrap the development tools after provisioning:
+
+```bash
+./jetson/bootstrap_devbox.sh
+gh auth login --hostname github.com --git-protocol https --web   # first run only
+./jetson/bootstrap_devbox.sh                                       # fetches submodules
+```
+
+[jetson/bootstrap_devbox.sh](jetson/bootstrap_devbox.sh) installs the C build dependencies, the GitHub CLI, and rustup with the compiler pinned in [rust-toolchain.toml](rust-toolchain.toml). It is idempotent. The node holds no state that exists only there: after a reflash, `provision_orin.sh` followed by `bootstrap_devbox.sh` restores the development setup, and GitHub access is re-created with `gh auth login` rather than stored.
+
 ## 2. Build Agent Image
 
 The `zeroclaw` image is built by patching the upstream daemon with the **Uplift Observer**.
 
 ```bash
 ./stack/build_zeroclaw.sh
-docker compose build zeroclaw
+docker compose build zeroclaw-operator   # zeroclaw-admin shares the zeroclaw:latest image
 ```
 
-The first build is slow as it performs a full Cargo `release-fast` build. The build script uses a `trap` to restore patched files on exit, keeping the submodule tree clean.
+The first build is slow as it performs a full Cargo `release-fast` build. The build script uses a `trap` to restore patched files on exit, keeping the submodule tree clean. It compiles the `browser-native` and `sandbox-landlock` features (override with `CARGO_FEATURES`), and builds the dashboard bundle in a `node:24` container when `web/dist` is missing (force with `REBUILD_WEB=1`).
+
+The image runs as the unprivileged `uplift` user (UID/GID 2002, matching the Jetson account). If the host account differs, pass `--build-arg UID=... --build-arg GID=...`. The Landlock backend is compiled in but not selected in the config templates until ZeroClaw moves to a release that applies it only to spawned commands.
 
 ## 3. Optional: Host CLI
 
@@ -62,6 +76,7 @@ docker compose restart zeroclaw
 
 ## 5. Remote Dashboard Access
 
+The gateways listen on loopback only (`host = "127.0.0.1"`, `allow_public_bind = false`), so they are reached through an SSH tunnel. Port 42617 is the operator agent and 42618 the admin agent:
 
 ```bash
 ssh -L 42617:127.0.0.1:42617 <jetson-host>

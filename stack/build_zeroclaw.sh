@@ -10,6 +10,17 @@ echo "=========================================================="
 
 VERBOSE=${VERBOSE:-1}
 
+# sandbox-landlock compiles in the Landlock backend; it is used only when
+# [security.sandbox] in configs/zeroclaw-*.toml.template selects it. plugins-wasm is left
+# out on purpose: the agents load no WASM plugins, and omitting it keeps the
+# wasmtime sandbox (and its advisories) out of the binary.
+CARGO_FEATURES=${CARGO_FEATURES:-browser-native,sandbox-landlock}
+
+# The dashboard bundle (web/dist) is copied into the image by Dockerfile.zeroclaw.
+# It is built in a throwaway Node container so the host needs no Node toolchain.
+NODE_IMAGE=${NODE_IMAGE:-node:24-bookworm-slim}
+REBUILD_WEB=${REBUILD_WEB:-0}
+
 # Start a background timer that prints the elapsed time on a single line
 START=$(date +%s)
 timer() {
@@ -71,7 +82,7 @@ if [ "$VERBOSE" -eq 1 ]; then
     ) &
     TIMER_PID=$!
 
-    cargo build --profile release-fast --features browser-native 2>&1 | tee cargo_build.log
+    cargo build --profile release-fast --features "$CARGO_FEATURES" 2>&1 | tee cargo_build.log
     EXIT_CODE=${PIPESTATUS[0]}
     
     kill $TIMER_PID 2>/dev/null
@@ -82,7 +93,7 @@ else
     TIMER_PID=$!
 
     # Run cargo build and redirect output to a log file so it doesn't garble the timer
-    cargo build --profile release-fast --features browser-native > cargo_build.log 2>&1
+    cargo build --profile release-fast --features "$CARGO_FEATURES" > cargo_build.log 2>&1
     EXIT_CODE=$?
 
     # Kill the background timer
@@ -100,6 +111,18 @@ else
     tail -n 20 cargo_build.log
     echo "----------------------------------"
     echo "Check stack/zeroclaw/cargo_build.log for the full error."
+fi
+
+if [ $EXIT_CODE -eq 0 ] && { [ "$REBUILD_WEB" = "1" ] || [ ! -f web/dist/index.html ]; }; then
+    echo "Building dashboard bundle (web/dist) in ${NODE_IMAGE}..."
+    docker run --rm \
+        --user "$(id -u):$(id -g)" \
+        -e HOME=/tmp \
+        -v "$PWD/web:/web" -w /web \
+        "$NODE_IMAGE" \
+        sh -c "npm ci --no-audit --no-fund && npm run build"
+    EXIT_CODE=$?
+    [ $EXIT_CODE -eq 0 ] || echo "Dashboard build failed with exit code $EXIT_CODE"
 fi
 
 exit $EXIT_CODE

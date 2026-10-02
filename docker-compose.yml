@@ -21,7 +21,7 @@ services:
       - HF_DATASETS_OFFLINE=${HF_DATASETS_OFFLINE:-1}
       - HF_TOKEN=${HF_TOKEN}
     volumes:
-      - ${REASONING_ENGINE_DIR:-/home/lhzn/.cache/huggingface}:/data/models/huggingface
+      - ${REASONING_ENGINE_DIR:-${HOME}/.cache/huggingface}:/data/models/huggingface
       - ./patches/gemma4_patch.py:/opt/venv/lib/python3.10/site-packages/vllm/model_executor/models/gemma4.py
       - ./patches/gemma4_mm_patch.py:/opt/venv/lib/python3.10/site-packages/vllm/model_executor/models/gemma4_mm.py
       - ./patches/fused_moe_patch.py:/opt/venv/lib/python3.10/site-packages/vllm/lora/layers/fused_moe.py
@@ -29,12 +29,17 @@ services:
     restart: unless-stopped
 
   # THE OPERATOR AGENT (Supervised, General Access)
+  #
+  # Both agents run as the image's unprivileged 'uplift' user (stack/Dockerfile.zeroclaw).
+  # ZeroClaw's Landlock backend is compiled in but not yet selected; see
+  # [security.sandbox] in the config templates. Host networking is kept for now because the configs reach the
+  # vLLM proxy, browser node and telemetry MCP on 127.0.0.1. Moving to a bridge
+  # network first needs the host vLLM proxy rebound and the configs repointed.
   zeroclaw-operator:
     build:
       context: ./stack/zeroclaw
       dockerfile: ../Dockerfile.zeroclaw
     image: zeroclaw:latest
-    user: "root"
     network_mode: host
     environment:
       - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
@@ -42,7 +47,6 @@ services:
       - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-vllm}
       - ZEROCLAW_MODEL=${VLLM_SERVED_MODEL_NAME:-gemma-4-26b-a4b}
       - ZEROCLAW_GATEWAY_PORT=42617
-      - ZEROCLAW_NO_SANDBOX=1
     volumes:
       - ./.zeroclaw-operator:/zeroclaw-data/.zeroclaw
       - ./.zeroclaw-operator/workspace:/zeroclaw-data/workspace
@@ -61,7 +65,6 @@ services:
       context: ./stack/zeroclaw
       dockerfile: ../Dockerfile.zeroclaw
     image: zeroclaw:latest
-    user: "root"
     network_mode: host
     environment:
       - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
@@ -69,29 +72,32 @@ services:
       - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-vllm}
       - ZEROCLAW_MODEL=${VLLM_SERVED_MODEL_NAME:-gemma-4-26b-a4b}
       - ZEROCLAW_GATEWAY_PORT=42618
-      - ZEROCLAW_NO_SANDBOX=1
     volumes:
       - ./.zeroclaw-admin:/zeroclaw-data/.zeroclaw
       - ./.zeroclaw-admin/workspace:/zeroclaw-data/workspace
       - ./.zeroclaw-operator/workspace:/zeroclaw-data/operator_workspace
-      - ~/.zeroclaw/ssh:/home/lhzn/.ssh
+      # HOME is /zeroclaw-data, so this is the agent's ~/.ssh (the allowed root in
+      # configs/zeroclaw-admin.toml.template). Read-only: known_hosts is populated
+      # on the host, which pins host keys. Key restrictions: docs/ssh-setup.md.
+      - ~/.zeroclaw/ssh:/zeroclaw-data/.ssh:ro
       - ./configs/admin-index.html:/zeroclaw-data/web/dist/index.html:ro
       - ./scripts/zeroclaw_entrypoint.sh:/usr/local/bin/zeroclaw_entrypoint.sh:ro
     entrypoint: ["/usr/local/bin/zeroclaw_entrypoint.sh"]
     command: ["daemon"]
-    extra_hosts:
-      - "karone.local:10.219.100.19"
     restart: unless-stopped
     depends_on:
       - reasoning-engine
       - browser-node
       - jetson-telemetry
 
+  # Selenium has no authentication, so it is published on loopback only; the
+  # agents reach it at 127.0.0.1:4444 over host networking. The image is pinned
+  # by digest (the 'latest' index as resolved on 2026-10-01).
   browser-node:
-    image: seleniarm/standalone-chromium:latest
+    image: seleniarm/standalone-chromium@sha256:d644a5f679e83e63344cee11c08fc2c7bf4acf43217434a8621a2bc85f7473a5
     shm_size: "2g"
     ports:
-      - "4444:4444"
+      - "127.0.0.1:4444:4444"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -101,9 +107,10 @@ services:
       context: ./stack/jetson-telemetry-mcp
     image: jetson-telemetry-mcp:latest
     ports:
-      - "8765:8765"
+      - "127.0.0.1:8765:8765"
     environment:
-      - MCP_TRANSPORT=sse
+      # Streamable HTTP at /mcp; HTTP+SSE is deprecated by the MCP 2026-07-28 revision.
+      - MCP_TRANSPORT=streamable-http
     volumes:
       - /sys:/sys:ro
       - /usr/bin/tegrastats:/usr/bin/tegrastats:ro

@@ -26,16 +26,20 @@ ssh-keygen -t ed25519 -f ~/.zeroclaw/ssh/id_ed25519_agent -N "" -C "ZeroClaw Age
 
 ### 2. Configure Docker Mounts
 
-Update your `docker-compose.yml` to mount the dedicated SSH directory into the ZeroClaw container:
+`docker-compose.yml` mounts the dedicated SSH directory into the admin agent only. The container's `HOME` is `/zeroclaw-data`, so this is the agent's `~/.ssh`:
 
 ```yaml
 services:
-  zeroclaw:
+  zeroclaw-admin:
     # ...
     volumes:
-      - ./.zeroclaw:/zeroclaw-data/.zeroclaw
-      - ./workspace:/zeroclaw-data/workspace
       - ~/.zeroclaw/ssh:/zeroclaw-data/.ssh:ro # Mount the agent keys
+```
+
+The mount is read-only, so the agent cannot add host keys itself. Record them on the Jetson host instead, which also pins them:
+
+```bash
+ssh-keyscan -t ed25519 <remote-host> >> ~/.zeroclaw/ssh/known_hosts
 ```
 
 ### 3. Update ZeroClaw Policy
@@ -49,10 +53,9 @@ allowed_commands = ["*", "ssh"]
 
 # Allow the agent to read its own keys
 allowed_roots = ["~/.ssh"]
-
-# (Recommended) Enable Host Network mode if resolving .local hostnames
-# network_mode: host in docker-compose.yml
 ```
+
+Use unicast DNS names or addresses for remote hosts. mDNS (`.local`) names do not resolve from inside a container or across a routed VPN.
 
 ### 4. Authorize the Agent on Remote Hosts
 
@@ -61,6 +64,18 @@ Copy the agent's public key to every machine it needs to manage:
 ```bash
 ssh-copy-id -i ~/.zeroclaw/ssh/id_ed25519_agent.pub <remote-user>@<remote-host>
 ```
+
+Then restrict the key on each remote host. ZeroClaw's sandbox confines the agent on the Jetson; these options confine what a leaked or misused agent key can do elsewhere. Edit the copied line in the remote `~/.ssh/authorized_keys` so it starts with:
+
+```text
+from="<jetson-ip>",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-user-rc ssh-ed25519 AAAA... ZeroClaw Agent @ <jetson-host>
+```
+
+*   `from=` limits the key to the Jetson's own address (use a fixed DHCP reservation so it does not change).
+*   The `no-*` options stop the key being used as a tunnel or to reach a forwarded agent.
+*   Where the agent only needs a fixed task, add `command="..."` to pin it to that one command.
+
+Changing `authorized_keys` on another host is a change to that host's access policy; agree it with the host's owner first.
 
 ### 5. Verify Access
 
