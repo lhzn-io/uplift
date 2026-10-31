@@ -24,7 +24,10 @@ def post_webhook(port, message):
         return None
 
 def main():
-    op_workspace = "/home/uplift/Projects/lhzn-io/uplift/.zeroclaw-operator/workspace"
+    # ZeroClaw config schema V3: the operator workspace is agents/default/workspace
+    # under its install root; the admin container mounts it at /zeroclaw-data/operator_workspace.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    op_workspace = os.path.join(repo_root, ".zeroclaw-operator", "agents", "default", "workspace")
     op_challenge_file = os.path.join(op_workspace, "state", "operator_challenge.json")
     
     # Ensure directories are writable

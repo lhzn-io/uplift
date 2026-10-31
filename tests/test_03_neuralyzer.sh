@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# tests/test_03_neuralyzer.sh — Neuralyzer hard wipe smoke test
-# Destructive test: verifies /api/maintenance/neuralyze with mode=hard removes
-# conversation namespace entries from the operator memory DB.
+# tests/test_03_neuralyzer.sh: scripts/neuralyzer.sh wipe smoke test
+# Destructive test: runs the offline neuralyzer at level 3 (state, sessions and
+# long-term memory) against the operator's ZeroClaw V3 install root, and checks
+# that the agent workspace and the uplift traces survive. Restarts the agents.
 set -euo pipefail
 source "$(dirname "$0")/lib/common.sh"
 
-GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:42617}"
-ADMIN_URL="${ADMIN_URL:-http://[::1]:42617}"
-DB_PATH="${DB_PATH:-.zeroclaw-operator/workspace/memory/brain.db}"
-TEST_KEY="copilot-neuralyzer-smoke"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BASE="${ROOT_DIR}/.zeroclaw-operator"
+PROBE="neuralyzer-probe"
 
-suite "neuralyzer-hard-wipe"
+suite "neuralyzer-wipe"
 
 if [[ "${ENABLE_NEURALYZER_WIPE_TEST:-0}" != "1" ]]; then
     skip "destructive wipe test enabled" "set ENABLE_NEURALYZER_WIPE_TEST=1 to run"
@@ -18,96 +18,35 @@ if [[ "${ENABLE_NEURALYZER_WIPE_TEST:-0}" != "1" ]]; then
     exit $?
 fi
 
-if [[ ! -f "${DB_PATH}" ]]; then
-    fail "memory DB exists" "missing: ${DB_PATH}"
+if [[ ! -d "${BASE}/data" ]]; then
+    fail "operator data dir exists" "missing: ${BASE}/data (start the stack once first)"
     suite_done
     exit $?
 fi
 
-if docker ps --filter "name=zeroclaw-operator" --filter "status=running" --format '{{.Names}}' 2>/dev/null | grep -q 'zeroclaw-operator'; then
-    pass "zeroclaw-operator container up"
+# Probes that must be wiped, and probes that must survive.
+WIPED=("${BASE}/data/state/${PROBE}" "${BASE}/data/sessions/${PROBE}" "${BASE}/data/memory/${PROBE}")
+KEPT=("${BASE}/agents/default/workspace/${PROBE}" "${ROOT_DIR}/traces/operator/${PROBE}")
+for f in "${WIPED[@]}" "${KEPT[@]}"; do
+    mkdir -p "$(dirname "$f")" && echo probe > "$f"
+done
+pass "seeded probe files"
+
+if NEURALYZER_LEVEL=3 "${ROOT_DIR}/scripts/neuralyzer.sh" > /dev/null 2>&1; then
+    pass "neuralyzer.sh level 3 exits 0"
 else
-    fail "zeroclaw-operator container up" "run: ./start_stack.sh"
-    suite_done
-    exit $?
+    fail "neuralyzer.sh level 3 exits 0" "re-run: NEURALYZER_LEVEL=3 ./scripts/neuralyzer.sh"
 fi
 
-if http_ok "${GATEWAY_URL}/api/health" 5; then
-    pass "gateway health endpoint reachable"
-else
-    fail "gateway health endpoint reachable" "url=${GATEWAY_URL}/api/health"
-    suite_done
-    exit $?
-fi
+for f in "${WIPED[@]}"; do
+    if [[ ! -e "$f" ]]; then pass "wiped ${f#${ROOT_DIR}/}"; else fail "wiped ${f#${ROOT_DIR}/}" "still present"; fi
+done
+for f in "${KEPT[@]}"; do
+    if [[ -e "$f" ]]; then pass "kept ${f#${ROOT_DIR}/}"; else fail "kept ${f#${ROOT_DIR}/}" "removed"; fi
+    rm -f "$f"
+done
 
-pair_code_resp="$(curl -sS -X POST "${ADMIN_URL}/admin/paircode/new" 2>/dev/null || echo '{}')"
-pair_code="$(echo "${pair_code_resp}" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('pairing_code',''))" 2>/dev/null || true)"
-if [[ -n "${pair_code}" ]]; then
-    pass "generated pairing code"
-else
-    fail "generated pairing code" "response: ${pair_code_resp:0:200}"
-    suite_done
-    exit $?
-fi
-
-pair_resp="$(curl -sS -X POST -H "X-Pairing-Code: ${pair_code}" "${GATEWAY_URL}/pair" 2>/dev/null || echo '{}')"
-token="$(echo "${pair_resp}" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('token',''))" 2>/dev/null || true)"
-if [[ -n "${token}" ]]; then
-    pass "paired and received bearer token"
-else
-    fail "paired and received bearer token" "response: ${pair_resp:0:200}"
-    suite_done
-    exit $?
-fi
-
-before_count="$(python3 - <<PY
-import sqlite3, time, uuid
-path = "${DB_PATH}"
-key = "${TEST_KEY}"
-conn = sqlite3.connect(path)
-cur = conn.cursor()
-cur.execute("DELETE FROM memories WHERE key=?", (key,))
-cur.execute(
-    "INSERT INTO memories (id, key, content, category, namespace, created_at, updated_at, importance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    (str(uuid.uuid4()), key, "smoke row for hard wipe", "conversation", "conversation", int(time.time()), int(time.time()), 0.1),
-)
-conn.commit()
-cur.execute("SELECT COUNT(*) FROM memories WHERE key=? AND namespace='conversation'", (key,))
-print(cur.fetchone()[0])
-PY
-)"
-if [[ "${before_count}" == "1" ]]; then
-    pass "seeded conversation memory row"
-else
-    fail "seeded conversation memory row" "count=${before_count}"
-    suite_done
-    exit $?
-fi
-
-wipe_resp="$(curl -sS -X POST "${GATEWAY_URL}/api/maintenance/neuralyze" -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' -d '{"mode":"hard"}' 2>/dev/null || echo '{}')"
-wipe_status="$(echo "${wipe_resp}" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || true)"
-if [[ "${wipe_status}" == "success" ]]; then
-    pass "maintenance neuralyze hard call returns success"
-else
-    fail "maintenance neuralyze hard call returns success" "response: ${wipe_resp:0:260}"
-    suite_done
-    exit $?
-fi
-
-after_count="$(python3 - <<PY
-import sqlite3
-path = "${DB_PATH}"
-key = "${TEST_KEY}"
-conn = sqlite3.connect(path)
-cur = conn.cursor()
-cur.execute("SELECT COUNT(*) FROM memories WHERE key=? AND namespace='conversation'", (key,))
-print(cur.fetchone()[0])
-PY
-)"
-if [[ "${after_count}" == "0" ]]; then
-    pass "hard wipe removed conversation memory row"
-else
-    fail "hard wipe removed conversation memory row" "count=${after_count}"
-fi
+(cd "${ROOT_DIR}" && docker compose up -d zeroclaw-operator zeroclaw-admin > /dev/null 2>&1) \
+    && pass "agents restarted" || fail "agents restarted" "run: docker compose up -d zeroclaw-operator zeroclaw-admin"
 
 suite_done

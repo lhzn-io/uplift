@@ -215,10 +215,6 @@ else
     rm .hf_latest
 fi
 
-# Get tokens from both agents if possible
-OP_TOKEN=$(docker compose -f "${ROOT_DIR}/docker-compose.yml" exec zeroclaw-operator zeroclaw gateway list-paired-tokens 2>/dev/null | grep -v "2026-" | head -n 1 || true)
-ADMIN_TOKEN=$(docker compose -f "${ROOT_DIR}/docker-compose.yml" exec zeroclaw-admin zeroclaw gateway list-paired-tokens 2>/dev/null | grep -v "2026-" | head -n 1 || true)
-
 echo ""
 BROWSER_NODE_STATUS="Down or Missing"
 if docker compose -f "${ROOT_DIR}/docker-compose.yml" ps browser-node 2>/dev/null | grep -q 'Up'; then
@@ -230,11 +226,12 @@ if docker compose -f "${ROOT_DIR}/docker-compose.yml" ps jetson-telemetry 2>/dev
     JETSON_MCP_STATUS="Up (Listening on :8765)"
 fi
 
-echo "  Operator UI:    http://$(hostname -I | awk '{print $1}'):42617"
-echo "  Admin UI:       http://$(hostname -I | awk '{print $1}'):42618 (Turbo Pascal Theme)"
+echo "  Operator UI:    http://127.0.0.1:42617 (loopback; ssh -L 42617:127.0.0.1:42617 $(hostname))"
+echo "  Admin UI:       http://127.0.0.1:42618 (loopback; ssh -L 42618:127.0.0.1:42618 $(hostname))"
+echo "  Pair a browser: docker compose exec zeroclaw-operator zeroclaw gateway get-paircode --new"
 echo "  Browser Node:   ${BROWSER_NODE_STATUS}"
 echo "  Jetson MCP:     ${JETSON_MCP_STATUS}"
-echo "  Inference logs: docker logs -f reasoning-engine"
+echo "  Inference logs: docker compose logs -f reasoning-engine"
 echo ""
 
 if [[ ${FAILS} -eq 0 ]]; then

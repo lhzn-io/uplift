@@ -30,8 +30,24 @@ import urllib.error
 import urllib.request
 
 PROMPT = "say hello"
+AGENT = os.environ.get("ZEROCLAW_AGENT", "default")
+# Since ZeroClaw v0.8.6 a standalone `zeroclaw agent` refuses to start while the agent daemon in the container
+# owns the config state, so a one-shot turn runs on a scratch copy of the agent's config (same model, tools,
+# MCP servers and UPLIFT_TRACE_PATH; separate sessions and memory).
+def oneshot_cmd(container: str, agent_args: list[str], zeroclaw_flags: list[str] = ()) -> list[str]:
+    import shlex
+
+    run = " ".join(shlex.quote(a) for a in ["zeroclaw", "--config-dir", "/tmp/zc-oneshot", *zeroclaw_flags, *agent_args])
+    script = (
+        "set -e; src=/zeroclaw-data/.zeroclaw; rm -rf /tmp/zc-oneshot; mkdir -p /tmp/zc-oneshot; "
+        "cp $src/config.toml $src/.secret_key /tmp/zc-oneshot/; "
+        "[ -f $src/identity.json ] && cp $src/identity.json /tmp/zc-oneshot/; "
+        f"cd /tmp && exec {run}"
+    )
+    return ["docker", "exec", container, "sh", "-c", script]
+
 INFERENCE_URL_DEFAULT = "http://127.0.0.1:8000"
-CONTAINER_DEFAULT = "uplift-zeroclaw-1"
+CONTAINER_DEFAULT = "uplift-zeroclaw-operator-1"
 MAX_TOKENS = 8
 TEMPERATURE = 0.0
 
@@ -141,7 +157,8 @@ def bench_agent(
         before = get_metrics(inference_url, model)
         t0 = time.monotonic()
         proc = subprocess.run(
-            ["docker", "exec", container, "zeroclaw", "agent", "-m", PROMPT],
+            # ZeroClaw v0.8.5 requires the agent alias (config schema V3 [agents.<alias>]).
+            oneshot_cmd(container, ["agent", "--agent", AGENT, "-m", PROMPT]),
             capture_output=True,
             text=True,
             timeout=120,

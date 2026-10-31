@@ -10,7 +10,17 @@ WIPE_STATE=true
 WIPE_SESSIONS=false
 WIPE_MEMORY=false
 
-if [ -t 0 ] && [ -t 1 ]; then
+# NEURALYZER_LEVEL=1|2|3 selects the wipe level without a prompt (used by
+# tests/test_03_neuralyzer.sh and other automation).
+if [ -n "${NEURALYZER_LEVEL:-}" ]; then
+    case "$NEURALYZER_LEVEL" in
+        1) WIPE_STATE=true ;;
+        2) WIPE_STATE=true; WIPE_SESSIONS=true ;;
+        3) WIPE_STATE=true; WIPE_SESSIONS=true; WIPE_MEMORY=true ;;
+        *) echo "NEURALYZER_LEVEL must be 1, 2 or 3" >&2; exit 2 ;;
+    esac
+    echo "Wipe level ${NEURALYZER_LEVEL} selected via NEURALYZER_LEVEL."
+elif [ -t 0 ] && [ -t 1 ]; then
     echo "=========================================================="
     echo "                  ZeroClaw Neuralyzer                     "
     echo "=========================================================="
@@ -39,34 +49,34 @@ echo "Preparing to wipe selected memory..."
 echo "Stopping Agent services..."
 (cd "$PROJECT_ROOT" && docker compose stop zeroclaw-operator zeroclaw-admin 2>/dev/null) || true
 
+# ZeroClaw config schema V3 layout: .zeroclaw-<tier>/ is the install root and
+# runtime state lives under data/. The agent workspace (agents/default/workspace)
+# and the uplift traces (./traces/<tier>/) are deliberately left untouched.
 AGENT_BASES=("${PROJECT_ROOT}/.zeroclaw-operator" "${PROJECT_ROOT}/.zeroclaw-admin")
 
 for base in "${AGENT_BASES[@]}"; do
-    workspace="${base}/workspace"
+    data="${base}/data"
     echo "--- Wiping ${base##*/} ---"
-    
+
     if [ "$WIPE_STATE" = true ]; then
         echo "- Wiping physical state files and pairings..."
-        if [ -d "$workspace/state" ]; then
-            rm -rf "${workspace}/state/"*
+        if [ -d "$data/state" ]; then
+            rm -rf "${data}/state/"*
         fi
-        if [ -f "$workspace/devices.db" ]; then
-            rm -f "$workspace/devices.db"*
-        fi
-        rm -f "${base}/daemon_state.json"
+        rm -f "${data}/devices.db"*
     fi
 
     if [ "$WIPE_SESSIONS" = true ]; then
         echo "- Wiping chat sessions..."
-        if [ -d "$workspace/sessions" ]; then
-            rm -rf "${workspace}/sessions/"*
+        if [ -d "$data/sessions" ]; then
+            rm -rf "${data}/sessions/"*
         fi
     fi
 
     if [ "$WIPE_MEMORY" = true ]; then
         echo "- Wiping long-term memory (knowledge)..."
-        if [ -d "$workspace/memory" ]; then
-            rm -rf "${workspace}/memory/"*
+        if [ -d "$data/memory" ]; then
+            rm -rf "${data}/memory/"*
         fi
     fi
 done

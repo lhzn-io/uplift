@@ -34,17 +34,38 @@ CONTAINER = os.environ.get("ZEROCLAW_CONTAINER", "uplift-zeroclaw-operator-1")
 INFERENCE_URL = os.environ.get("INFERENCE_URL", "http://127.0.0.1:8100")
 MODEL = os.environ.get("VLLM_SERVED_MODEL_NAME", "gemma-4-26b-a4b")
 
-# Prompt designed to *require* the deferred web_search tool. Naming the tool
-# explicitly biases the model toward the lazy-load path (call tool_search,
-# then web_search), which is what we want to exercise.
+AGENT = os.environ.get("ZEROCLAW_AGENT", "default")
+
+# Prompt designed to *require* a deferred native tool. cron_list is deferred by
+# deferred_builtin_tools and works offline (web_search would need a search API
+# key). Naming the tool biases the model toward the lazy-load path
+# (tool_search, then cron_list), which is what we want to exercise.
 PROMPT = (
-    "Use the web_search tool to look up 'NVIDIA Jetson Orin AGX AI TOPS' "
-    "and reply with one short sentence summarizing the AI compute throughput."
+    "Use the cron_list tool to list the scheduled jobs, then reply with one "
+    "full sentence stating how many scheduled jobs exist."
 )
 
-# Debug-level filter limited to the modules that emit `tool_search:` log lines
-# so we get a recoverable signal without drowning in unrelated debug noise.
-RUST_LOG = "zeroclaw_tools::tool_search=debug,zeroclaw_runtime::tools=debug"
+# ZeroClaw v0.8.5 prints recorded logs on the terminal only with --verbose, and
+# --log-level debug records the tool_search activation lines this test parses.
+# Log lines are prefixed with "[system]".
+LOG_PREFIX = "[system]"
+ANSI = re.compile(r"\x1b\[[0-9;]*m")  # log lines carry colour codes
+
+
+# Since ZeroClaw v0.8.6 a standalone `zeroclaw agent` refuses to start while the agent daemon in the container
+# owns the config state, so a one-shot turn runs on a scratch copy of the agent's config (same model, tools,
+# MCP servers and UPLIFT_TRACE_PATH; separate sessions and memory).
+def oneshot_cmd(container: str, agent_args: list[str], zeroclaw_flags: list[str] = ()) -> list[str]:
+    import shlex
+
+    run = " ".join(shlex.quote(a) for a in ["zeroclaw", "--config-dir", "/tmp/zc-oneshot", *zeroclaw_flags, *agent_args])
+    script = (
+        "set -e; src=/zeroclaw-data/.zeroclaw; rm -rf /tmp/zc-oneshot; mkdir -p /tmp/zc-oneshot; "
+        "cp $src/config.toml $src/.secret_key /tmp/zc-oneshot/; "
+        "[ -f $src/identity.json ] && cp $src/identity.json /tmp/zc-oneshot/; "
+        f"cd /tmp && exec {run}"
+    )
+    return ["docker", "exec", container, "sh", "-c", script]
 
 
 def vllm_request_count() -> float:
@@ -79,12 +100,8 @@ def main() -> int:
     t0 = time.monotonic()
     try:
         proc = subprocess.run(
-            [
-                "docker", "exec",
-                "-e", f"RUST_LOG={RUST_LOG}",
-                CONTAINER,
-                "zeroclaw", "agent", "-m", PROMPT,
-            ],
+            oneshot_cmd(CONTAINER, ["agent", "--agent", AGENT, "-m", PROMPT],
+                        ["--verbose", "--log-level", "debug"]),
             capture_output=True,
             text=True,
             timeout=120,
@@ -99,12 +116,11 @@ def main() -> int:
 
     stdout = proc.stdout
     stderr = proc.stderr
-    # `zeroclaw agent -m` mixes tracing output and the agent's reply on
-    # stdout; the actual user-visible reply is whatever follows the last
-    # tracing line.
+    # With --verbose, log lines ("[system] ...") and the agent's reply share
+    # the terminal; the reply is the last non-log line.
     reply_tail = ""
     for line in reversed(stdout.splitlines()):
-        if line.strip() and " DEBUG " not in line and " INFO " not in line:
+        if line.strip() and not line.lstrip().startswith(LOG_PREFIX):
             reply_tail = line.strip()
             break
 
@@ -127,11 +143,15 @@ def main() -> int:
     # or
     #   tool_search: query="...", matched=N, activated=K
     haystack = stdout + "\n" + stderr
-    activated_match = re.search(r"tool_search[^\n]*\bactivated=(\d+)", haystack)
-    if activated_match and int(activated_match.group(1)) >= 1:
+    # ZeroClaw v0.8.7 logs "tool_search select: requested=R, activated=A, not_found=N". A deferred built-in
+    # tool (cron_list here) is returned from the built-in schema set without counting as activated, which
+    # counts newly loaded MCP tools only; so the path is engaged when any requested schema was returned.
+    select = re.search(
+        r"tool_search select: requested=(\d+), activated=(\d+), not_found=(\d+)", ANSI.sub("", haystack))
+    if select and (int(select.group(1)) > int(select.group(3)) or int(select.group(2)) >= 1):
         print(
-            f"\n  ✓ tool_search invoked with activated="
-            f"{activated_match.group(1)} (deferred-loading path engaged)"
+            f"\n  ✓ tool_search select returned a deferred schema "
+            f"(requested={select.group(1)}, activated={select.group(2)}, not_found={select.group(3)})"
         )
     else:
         # Surface a snippet so failing runs are debuggable.
@@ -164,7 +184,8 @@ def main() -> int:
         "i don't have the ability", "i'm unable",
     )
     looks_like_refusal = any(s in reply_tail.lower() for s in refusal_signals)
-    if len(reply_tail) >= 30 and not looks_like_refusal:
+    # The cron_list answer is one short sentence ("There are 0 scheduled jobs.").
+    if len(reply_tail) >= 15 and not looks_like_refusal:
         print(f"  ✓ response is substantive ({len(reply_tail)} chars, not a refusal)")
     else:
         fails.append(

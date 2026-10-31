@@ -1,44 +1,44 @@
 {
   "schema_version": 1,
-  "run_id_utc": "20260508T162530Z",
+  "run_id_utc": "20261002T194100Z",
   "git": {
-    "short_sha": "e71761d",
+    "short_sha": "2fd5f42",
     "dirty": true
   },
   "stack": {
     "inference_url": "http://127.0.0.1:8000",
-    "container": "uplift-zeroclaw-1",
+    "container": "uplift-zeroclaw-operator-1",
     "model": "gemma-4-26b-a4b"
   },
   "params": {
-    "iterations": 10,
+    "iterations": 5,
     "prompt": "say hello",
     "max_tokens": 8,
     "temperature": 0.0
   },
   "direct_vllm": {
     "latency_s": {
-      "n": 10,
-      "mean": 0.2786,
-      "median": 0.2753,
-      "stdev": 0.01,
-      "min": 0.2744,
-      "max": 0.307,
-      "p95": 0.2772
+      "n": 5,
+      "mean": 0.7237,
+      "median": 0.7234,
+      "stdev": 0.0014,
+      "min": 0.722,
+      "max": 0.7256,
+      "p95": 0.7244
     },
     "prompt_tokens": {
-      "n": 10,
+      "n": 5,
       "mean": 15,
-      "median": 15.0,
+      "median": 15,
       "stdev": 0.0,
       "min": 15,
       "max": 15,
       "p95": 15
     },
     "completion_tokens": {
-      "n": 10,
+      "n": 5,
       "mean": 8,
-      "median": 8.0,
+      "median": 8,
       "stdev": 0.0,
       "min": 8,
       "max": 8,
@@ -47,61 +47,31 @@
     "rows": [
       {
         "iter": 1,
-        "latency_s": 0.307,
+        "latency_s": 0.7234,
         "prompt_tokens": 15,
         "completion_tokens": 8
       },
       {
         "iter": 2,
-        "latency_s": 0.2772,
+        "latency_s": 0.7256,
         "prompt_tokens": 15,
         "completion_tokens": 8
       },
       {
         "iter": 3,
-        "latency_s": 0.2744,
+        "latency_s": 0.7244,
         "prompt_tokens": 15,
         "completion_tokens": 8
       },
       {
         "iter": 4,
-        "latency_s": 0.2747,
+        "latency_s": 0.723,
         "prompt_tokens": 15,
         "completion_tokens": 8
       },
       {
         "iter": 5,
-        "latency_s": 0.2751,
-        "prompt_tokens": 15,
-        "completion_tokens": 8
-      },
-      {
-        "iter": 6,
-        "latency_s": 0.2751,
-        "prompt_tokens": 15,
-        "completion_tokens": 8
-      },
-      {
-        "iter": 7,
-        "latency_s": 0.2757,
-        "prompt_tokens": 15,
-        "completion_tokens": 8
-      },
-      {
-        "iter": 8,
-        "latency_s": 0.2755,
-        "prompt_tokens": 15,
-        "completion_tokens": 8
-      },
-      {
-        "iter": 9,
-        "latency_s": 0.2752,
-        "prompt_tokens": 15,
-        "completion_tokens": 8
-      },
-      {
-        "iter": 10,
-        "latency_s": 0.2759,
+        "latency_s": 0.722,
         "prompt_tokens": 15,
         "completion_tokens": 8
       }
@@ -109,36 +79,36 @@
   },
   "zeroclaw_agent": {
     "latency_s": {
-      "n": 10,
-      "mean": 3.292,
-      "median": 3.2949,
-      "stdev": 0.0143,
-      "min": 3.2709,
-      "max": 3.3126,
-      "p95": 3.3073
+      "n": 5,
+      "mean": 4.6204,
+      "median": 1.3767,
+      "stdev": 7.2575,
+      "min": 1.3713,
+      "max": 17.6031,
+      "p95": 1.3769
     },
     "prompt_tokens": {
-      "n": 10,
-      "mean": 6584,
-      "median": 6584.0,
+      "n": 5,
+      "mean": 7120,
+      "median": 7120,
       "stdev": 0.0,
-      "min": 6584,
-      "max": 6584,
-      "p95": 6584
+      "min": 7120,
+      "max": 7120,
+      "p95": 7120
     },
     "completion_tokens": {
-      "n": 10,
+      "n": 5,
       "mean": 10,
-      "median": 10.0,
+      "median": 10,
       "stdev": 0.0,
       "min": 10,
       "max": 10,
       "p95": 10
     },
     "vllm_calls_per_turn": {
-      "n": 10,
+      "n": 5,
       "mean": 1,
-      "median": 1.0,
+      "median": 1,
       "stdev": 0.0,
       "min": 1,
       "max": 1,
@@ -147,90 +117,45 @@
     "rows": [
       {
         "iter": 1,
-        "latency_s": 3.2993,
+        "latency_s": 17.6031,
         "vllm_calls": 1,
-        "prompt_tokens": 6584,
+        "prompt_tokens": 7120,
         "completion_tokens": 10,
         "cli_exit": 0,
         "reply_preview": "Hello! How can I help you today?"
       },
       {
         "iter": 2,
-        "latency_s": 3.2729,
+        "latency_s": 1.3767,
         "vllm_calls": 1,
-        "prompt_tokens": 6584,
+        "prompt_tokens": 7120,
         "completion_tokens": 10,
         "cli_exit": 0,
         "reply_preview": "Hello! How can I help you today?"
       },
       {
         "iter": 3,
-        "latency_s": 3.2709,
+        "latency_s": 1.3742,
         "vllm_calls": 1,
-        "prompt_tokens": 6584,
+        "prompt_tokens": 7120,
         "completion_tokens": 10,
         "cli_exit": 0,
         "reply_preview": "Hello! How can I help you today?"
       },
       {
         "iter": 4,
-        "latency_s": 3.295,
+        "latency_s": 1.3713,
         "vllm_calls": 1,
-        "prompt_tokens": 6584,
+        "prompt_tokens": 7120,
         "completion_tokens": 10,
         "cli_exit": 0,
         "reply_preview": "Hello! How can I help you today?"
       },
       {
         "iter": 5,
-        "latency_s": 3.2905,
+        "latency_s": 1.3769,
         "vllm_calls": 1,
-        "prompt_tokens": 6584,
-        "completion_tokens": 10,
-        "cli_exit": 0,
-        "reply_preview": "Hello! How can I help you today?"
-      },
-      {
-        "iter": 6,
-        "latency_s": 3.3073,
-        "vllm_calls": 1,
-        "prompt_tokens": 6584,
-        "completion_tokens": 10,
-        "cli_exit": 0,
-        "reply_preview": "Hello! How can I help you today?"
-      },
-      {
-        "iter": 7,
-        "latency_s": 3.3126,
-        "vllm_calls": 1,
-        "prompt_tokens": 6584,
-        "completion_tokens": 10,
-        "cli_exit": 0,
-        "reply_preview": "Hello! How can I help you today?"
-      },
-      {
-        "iter": 8,
-        "latency_s": 3.3002,
-        "vllm_calls": 1,
-        "prompt_tokens": 6584,
-        "completion_tokens": 10,
-        "cli_exit": 0,
-        "reply_preview": "Hello! How can I help you today?"
-      },
-      {
-        "iter": 9,
-        "latency_s": 3.2948,
-        "vllm_calls": 1,
-        "prompt_tokens": 6584,
-        "completion_tokens": 10,
-        "cli_exit": 0,
-        "reply_preview": "Hello! How can I help you today?"
-      },
-      {
-        "iter": 10,
-        "latency_s": 3.2766,
-        "vllm_calls": 1,
-        "prompt_tokens": 6584,
+        "prompt_tokens": 7120,
         "completion_tokens": 10,
         "cli_exit": 0,
         "reply_preview": "Hello! How can I help you today?"
@@ -238,8 +163,8 @@
     ]
   },
   "overhead": {
-    "latency_mean_s": 3.0134,
-    "latency_fraction_of_agent": 0.915,
-    "prompt_token_ratio": 438.93
+    "latency_mean_s": 3.8967,
+    "latency_fraction_of_agent": 0.843,
+    "prompt_token_ratio": 474.67
   }
 }
