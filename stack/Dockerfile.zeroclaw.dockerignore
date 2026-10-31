@@ -1,0 +1,8 @@
+# Build-context filter for Dockerfile.zeroclaw (BuildKit reads <Dockerfile>.dockerignore
+# in place of the context's own .dockerignore). The image only packages artifacts
+# built on the host by stack/build_zeroclaw.sh, and upstream ZeroClaw's .dockerignore
+# excludes exactly those (target/, web/dist, *.png, *.svg), so admit just them.
+*
+!target/release-fast/zeroclaw
+!web/dist
+!web/dist/**

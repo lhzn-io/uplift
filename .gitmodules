@@ -1,7 +1,7 @@
 [submodule "stack/zeroclaw"]
 	path = stack/zeroclaw
 	url = https://github.com/lhzn-io/zeroclaw.git
-	branch = uplift-core
+	branch = uplift-v0.8.7
 [submodule "stack/jetson-telemetry-mcp"]
 	path = stack/jetson-telemetry-mcp
 	url = https://github.com/lhzn-io/jetson-telemetry-mcp.git

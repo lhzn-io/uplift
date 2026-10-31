@@ -12,6 +12,9 @@ configs/zeroclaw.toml
 zeroclaw-data/
 workspace/
 
+# Uplift traces (agent per-turn and proxy per-request JSONL)
+traces/
+
 # Model weights (download on bootstrap)
 models/
 
@@ -23,6 +26,7 @@ target/
 
 # Python venvs
 .venv/
+scripts/.vllm-proxy-venv/
 *.egg-info/
 dist/
 build/

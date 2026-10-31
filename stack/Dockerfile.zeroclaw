@@ -1,19 +1,20 @@
 # Custom parent-level Dockerfile for ZeroClaw with Python 3 support on Ubuntu 24.04
 FROM ubuntu:24.04
 
-# Basic runtime dependencies including python3 and adduser for skill execution
+# Basic runtime dependencies including python3 and adduser for skill execution,
+# and the OpenSSH client the admin agent uses with its dedicated key (docs/ssh-setup.md)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         python3 \
         adduser \
+        openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the locally compiled artifacts
 COPY target/release-fast/zeroclaw /usr/local/bin/zeroclaw
 COPY web/dist /zeroclaw-data/web/dist
 
-ENV ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
 ENV HOME=/zeroclaw-data
 
 # Run as the host account that owns the bind-mounted state directories, so the

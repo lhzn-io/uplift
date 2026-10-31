@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "crates/uplift",
-    "crates/uplift-observer",
 ]
 # stack/zeroclaw is consumed as a git submodule and has its own workspace.
 exclude = [

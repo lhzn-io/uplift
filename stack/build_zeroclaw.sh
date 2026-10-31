@@ -10,16 +10,23 @@ echo "=========================================================="
 
 VERBOSE=${VERBOSE:-1}
 
-# sandbox-landlock compiles in the Landlock backend; it is used only when
-# [security.sandbox] in configs/zeroclaw-*.toml.template selects it. plugins-wasm is left
-# out on purpose: the agents load no WASM plugins, and omitting it keeps the
-# wasmtime sandbox (and its advisories) out of the binary.
-CARGO_FEATURES=${CARGO_FEATURES:-browser-native,sandbox-landlock}
+# sandbox-landlock compiles in the Landlock backend selected by
+# [risk_profiles.default] in configs/zeroclaw-*.toml.template. channel-slack is
+# not a default feature since ZeroClaw v0.8.5. plugins-wasm is left out on
+# purpose: the agents load no WASM plugins, and omitting it keeps the wasmtime
+# sandbox (and its advisories) out of the binary. The uplift trace observer is
+# part of the lab fork branch (UPLIFT_TRACE_PATH), so no source patching happens here.
+CARGO_FEATURES=${CARGO_FEATURES:-browser-native,sandbox-landlock,channel-slack}
+
+# The build log lives outside the submodule so the fork checkout stays clean.
+LOG_FILE="$DIR/cargo_build.log"
 
 # The dashboard bundle (web/dist) is copied into the image by Dockerfile.zeroclaw.
-# It is built in a throwaway Node container so the host needs no Node toolchain.
-NODE_IMAGE=${NODE_IMAGE:-node:24-bookworm-slim}
+# It is built with upstream's `cargo web build`, which renders the gateway's
+# OpenAPI spec and generates the TypeScript client with npm/npx (Node.js 24 from
+# jetson/bootstrap_devbox.sh), and is rebuilt whenever the ZeroClaw commit changes.
 REBUILD_WEB=${REBUILD_WEB:-0}
+WEB_STAMP=web/dist/.zeroclaw-commit
 
 # Start a background timer that prints the elapsed time on a single line
 START=$(date +%s)
@@ -36,38 +43,6 @@ timer() {
   done
 }
 
-export OBS_PATCH='let obs = crate::hooks::uplift::UpliftObserver::new(); runner.register(Box::new(obs));'
-awk '/\[dependencies\]/ { print; print "uplift = { path = \"../../../../crates/uplift\" }"; next }1' crates/zeroclaw-runtime/Cargo.toml > crates/zeroclaw-runtime/Cargo.toml.tmp && mv crates/zeroclaw-runtime/Cargo.toml.tmp crates/zeroclaw-runtime/Cargo.toml
-awk '/HookRunner::new/ { print; print "                " ENVIRON["OBS_PATCH"]; next }1' crates/zeroclaw-runtime/src/agent/agent.rs > agent.rs.tmp && mv agent.rs.tmp crates/zeroclaw-runtime/src/agent/agent.rs
-
-cat ../../crates/uplift-observer/src/lib.rs | sed 's/zeroclaw_runtime::hooks/super/g' > crates/zeroclaw-runtime/src/hooks/uplift.rs
-awk '/mod traits;/ { print; print "pub mod uplift;"; next }1' crates/zeroclaw-runtime/src/hooks/mod.rs > hooks_mod.tmp && mv hooks_mod.tmp crates/zeroclaw-runtime/src/hooks/mod.rs
-
-export LOOP_PATCH='    let hook_runner = if config.hooks.enabled { let mut r = crate::hooks::HookRunner::new(); let obs = crate::hooks::uplift::UpliftObserver::new(); r.register(Box::new(obs)); Some(std::sync::Arc::new(r)) } else { None };'
-awk '/let fallback_provider_loop / { print; print ENVIRON["LOOP_PATCH"]; next } { print }' crates/zeroclaw-runtime/src/agent/loop_.rs > loop.tmp && mv loop.tmp crates/zeroclaw-runtime/src/agent/loop_.rs
-
-awk '
-/pub async fn run\(/ { in_run=1; print; next }
-/^}/ { if (in_run) in_run=0; print; next }
-in_run && /run_tool_call_loop\(/ { in_loop=1; print; next }
-in_run && in_loop && /config\.agent\.max_tool_iterations,/ {
-    print;
-    getline; print;
-    getline; print;
-    getline;
-    if ($0 ~ /None,/) {
-        print "                        hook_runner.as_deref(),";
-    } else {
-        print;
-    }
-    in_loop=0;
-    next
-}
-{ print }
-' crates/zeroclaw-runtime/src/agent/loop_.rs > loop2.tmp && mv loop2.tmp crates/zeroclaw-runtime/src/agent/loop_.rs
-
-trap "git restore crates/zeroclaw-runtime/Cargo.toml crates/zeroclaw-runtime/src/agent/agent.rs crates/zeroclaw-runtime/src/agent/loop_.rs crates/zeroclaw-runtime/src/hooks/mod.rs && rm -f crates/zeroclaw-runtime/src/hooks/uplift.rs" EXIT
-
 if [ "$VERBOSE" -eq 1 ]; then
     echo "Running in verbose mode..."
     (
@@ -82,7 +57,7 @@ if [ "$VERBOSE" -eq 1 ]; then
     ) &
     TIMER_PID=$!
 
-    cargo build --profile release-fast --features "$CARGO_FEATURES" 2>&1 | tee cargo_build.log
+    cargo build --profile release-fast --features "$CARGO_FEATURES" 2>&1 | tee "$LOG_FILE"
     EXIT_CODE=${PIPESTATUS[0]}
     
     kill $TIMER_PID 2>/dev/null
@@ -93,7 +68,7 @@ else
     TIMER_PID=$!
 
     # Run cargo build and redirect output to a log file so it doesn't garble the timer
-    cargo build --profile release-fast --features "$CARGO_FEATURES" > cargo_build.log 2>&1
+    cargo build --profile release-fast --features "$CARGO_FEATURES" > "$LOG_FILE" 2>&1
     EXIT_CODE=$?
 
     # Kill the background timer
@@ -108,21 +83,25 @@ if [ $EXIT_CODE -eq 0 ]; then
 else
     echo "❌ Build failed with exit code $EXIT_CODE"
     echo "--- Last 20 lines of build log ---"
-    tail -n 20 cargo_build.log
+    tail -n 20 "$LOG_FILE"
     echo "----------------------------------"
-    echo "Check stack/zeroclaw/cargo_build.log for the full error."
+    echo "Check stack/cargo_build.log for the full error."
 fi
 
-if [ $EXIT_CODE -eq 0 ] && { [ "$REBUILD_WEB" = "1" ] || [ ! -f web/dist/index.html ]; }; then
-    echo "Building dashboard bundle (web/dist) in ${NODE_IMAGE}..."
-    docker run --rm \
-        --user "$(id -u):$(id -g)" \
-        -e HOME=/tmp \
-        -v "$PWD/web:/web" -w /web \
-        "$NODE_IMAGE" \
-        sh -c "npm ci --no-audit --no-fund && npm run build"
+HEAD_COMMIT=$(git rev-parse HEAD)
+if [ $EXIT_CODE -eq 0 ] && { [ "$REBUILD_WEB" = "1" ] || [ "$(cat "$WEB_STAMP" 2>/dev/null)" != "$HEAD_COMMIT" ]; }; then
+    echo "Building dashboard bundle (web/dist) for ${HEAD_COMMIT:0:9} with cargo web build..."
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "npm not found: run ./jetson/bootstrap_devbox.sh to install Node.js 24"
+        exit 1
+    fi
+    cargo web build
     EXIT_CODE=$?
-    [ $EXIT_CODE -eq 0 ] || echo "Dashboard build failed with exit code $EXIT_CODE"
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "$HEAD_COMMIT" > "$WEB_STAMP"
+    else
+        echo "Dashboard build failed with exit code $EXIT_CODE"
+    fi
 fi
 
 exit $EXIT_CODE
