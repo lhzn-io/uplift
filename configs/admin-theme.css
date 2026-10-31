@@ -1,0 +1,33 @@
+/* Turbo Pascal theme for the admin agent's dashboard, so the privileged tier is
+   visually distinct. scripts/zeroclaw_entrypoint.sh injects this file into the
+   built index.html when ZEROCLAW_UI_THEME_CSS points at it. */
+:root {
+  --pc-bg-base: #000084 !important;
+  --pc-bg-surface: #0000AA !important;
+  --pc-bg-elevated: #0000FF !important;
+  --pc-bg-input: #000084 !important;
+  --pc-bg-code: #000084 !important;
+  --pc-bg-sidebar: #000084 !important;
+
+  --pc-text-primary: #FFFF55 !important;
+  --pc-text-secondary: #FFFFFF !important;
+  --pc-text-muted: #AAAAAA !important;
+  --pc-text-faint: #555555 !important;
+
+  --pc-accent: #FFFF55 !important;
+  --pc-accent-light: #FFFFFF !important;
+  --pc-accent-dim: rgba(255, 255, 85, 0.3) !important;
+  --pc-accent-glow: rgba(255, 255, 85, 0.1) !important;
+
+  --pc-border: rgba(255, 255, 255, 0.3) !important;
+  --pc-border-strong: rgba(255, 255, 255, 0.5) !important;
+
+  --color-status-success: #55FF55 !important;
+  --color-status-warning: #FFFF55 !important;
+  --color-status-error: #FF5555 !important;
+
+  --pc-font-ui: 'JetBrains Mono', 'Courier New', monospace !important;
+}
+body { background-color: #000084 !important; color: #FFFF55 !important; }
+.text-gradient-blue { background: none !important; -webkit-text-fill-color: #FFFF55 !important; color: #FFFF55 !important; }
+.btn-electric { background: #0000AA !important; border: 1px solid #FFFF55 !important; color: #FFFF55 !important; }

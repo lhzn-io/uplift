@@ -34,7 +34,10 @@ elif [ "${MODEL_CHOICE}" = "cyankiwi/gemma-4-12B-it-AWQ-INT4" ]; then
     export VLLM_EXTRA_ARGS="--enable-auto-tool-choice --reasoning-parser gemma4 --tool-call-parser gemma4"
 elif [ "${MODEL_CHOICE}" = "cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit" ]; then
     export GEMMA4_REPO="cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit"
-    export GEMMA4_SNAPSHOT="4033b16200f4152e55e100ea12dc388c537df622"
+    # The repo's history was squashed on 2026-07-21, which removed the previous
+    # pin (4033b16). 180b2d3 (2026-09-10) syncs chat_template.jinja with Google's
+    # upstream Gemma 4 template.
+    export GEMMA4_SNAPSHOT="180b2d35e35e4e48f6245367f3b41036f7cdabd6"
     export VLLM_IMAGE="ghcr.io/nvidia-ai-iot/vllm:gemma4-jetson-orin"
     export VLLM_MODEL="/data/models/huggingface/hub/models--cyankiwi--gemma-4-26B-A4B-it-AWQ-4bit/snapshots/${GEMMA4_SNAPSHOT}"
     export VLLM_SERVED_MODEL_NAME="gemma-4-26b-a4b"

@@ -30,11 +30,16 @@ services:
 
   # THE OPERATOR AGENT (Supervised, General Access)
   #
-  # Both agents run as the image's unprivileged 'uplift' user (stack/Dockerfile.zeroclaw).
-  # ZeroClaw's Landlock backend is compiled in but not yet selected; see
-  # [security.sandbox] in the config templates. Host networking is kept for now because the configs reach the
+  # Both agents run as the image's unprivileged 'uplift' user (stack/Dockerfile.zeroclaw),
+  # and spawned commands run under ZeroClaw's Landlock sandbox ([risk_profiles.default]
+  # in the config templates). Host networking is kept for now because the configs reach the
   # vLLM proxy, browser node and telemetry MCP on 127.0.0.1. Moving to a bridge
   # network first needs the host vLLM proxy rebound and the configs repointed.
+  #
+  # Layout (ZeroClaw config schema V3): .zeroclaw-<tier>/ is the install root, holding
+  # config.toml, data/ (state, sessions, memory), shared/ (skills) and
+  # agents/default/workspace/. Per-turn uplift traces go to ./traces/<tier>/, outside
+  # the state that scripts/neuralyzer.sh wipes.
   zeroclaw-operator:
     build:
       context: ./stack/zeroclaw
@@ -43,13 +48,10 @@ services:
     network_mode: host
     environment:
       - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
-      - ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
-      - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-vllm}
-      - ZEROCLAW_MODEL=${VLLM_SERVED_MODEL_NAME:-gemma-4-26b-a4b}
-      - ZEROCLAW_GATEWAY_PORT=42617
+      - UPLIFT_TRACE_PATH=/zeroclaw-data/traces/uplift-trace.jsonl
     volumes:
       - ./.zeroclaw-operator:/zeroclaw-data/.zeroclaw
-      - ./.zeroclaw-operator/workspace:/zeroclaw-data/workspace
+      - ./traces/operator:/zeroclaw-data/traces
       - ./scripts/zeroclaw_entrypoint.sh:/usr/local/bin/zeroclaw_entrypoint.sh:ro
     entrypoint: ["/usr/local/bin/zeroclaw_entrypoint.sh"]
     command: ["daemon"]
@@ -68,19 +70,17 @@ services:
     network_mode: host
     environment:
       - ZEROCLAW_CONFIG_DIR=/zeroclaw-data/.zeroclaw
-      - ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
-      - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-vllm}
-      - ZEROCLAW_MODEL=${VLLM_SERVED_MODEL_NAME:-gemma-4-26b-a4b}
-      - ZEROCLAW_GATEWAY_PORT=42618
+      - UPLIFT_TRACE_PATH=/zeroclaw-data/traces/uplift-trace.jsonl
+      - ZEROCLAW_UI_THEME_CSS=/zeroclaw-data/admin-theme.css
     volumes:
       - ./.zeroclaw-admin:/zeroclaw-data/.zeroclaw
-      - ./.zeroclaw-admin/workspace:/zeroclaw-data/workspace
-      - ./.zeroclaw-operator/workspace:/zeroclaw-data/operator_workspace
+      - ./traces/admin:/zeroclaw-data/traces
+      - ./.zeroclaw-operator/agents/default/workspace:/zeroclaw-data/operator_workspace
       # HOME is /zeroclaw-data, so this is the agent's ~/.ssh (the allowed root in
       # configs/zeroclaw-admin.toml.template). Read-only: known_hosts is populated
       # on the host, which pins host keys. Key restrictions: docs/ssh-setup.md.
       - ~/.zeroclaw/ssh:/zeroclaw-data/.ssh:ro
-      - ./configs/admin-index.html:/zeroclaw-data/web/dist/index.html:ro
+      - ./configs/admin-theme.css:/zeroclaw-data/admin-theme.css:ro
       - ./scripts/zeroclaw_entrypoint.sh:/usr/local/bin/zeroclaw_entrypoint.sh:ro
     entrypoint: ["/usr/local/bin/zeroclaw_entrypoint.sh"]
     command: ["daemon"]

@@ -1,73 +1,124 @@
-schema_version = 2
+# ZeroClaw config schema V3 template for the admin agent.
+# Rendered by scripts/apply_config.sh (envsubst) into .zeroclaw-admin/config.toml.
+# Generated from the V2 template with `zeroclaw config migrate` (ZeroClaw v0.8.5), updated for v0.8.7,
+# then edited: Landlock sandbox, excluded tools, lazy native tools, and the MCP
+# bundle that grants the telemetry server to the agent.
+schema_version = 3
 
 [providers]
-fallback = "vllm"
-
-[providers.models.vllm]
-model = "${VLLM_SERVED_MODEL_NAME}"
-base_url = "http://127.0.0.1:8100/v1"
+[providers.models.vllm.default]
 api_key = "${VLLM_API_KEY}"
 merge_system_into_user = false
+model = "${VLLM_SERVED_MODEL_NAME}"
 requires_openai_auth = false
 temperature = 0.7
 timeout_secs = 120
+uri = "http://127.0.0.1:8100/v1"
+[providers.transcription.groq.default]
+model = "whisper-large-v3-turbo"
+[channels.slack.default]
+app_token = "${SLACK_ADMIN_APP_TOKEN}"
+bot_token = "${SLACK_ADMIN_BOT_TOKEN}"
+channel_ids = ["*"]
+draft_update_interval_ms = 1200
+enabled = true
+interrupt_on_new_message = false
+mention_only = false
+stream_drafts = false
+thread_replies = false
+use_markdown_blocks = false
+[mcp_bundles.lab]
+servers = ["jetson-telemetry-mcp"]
 
-[agent]
+[[mcp.servers ]]
+name = "jetson-telemetry-mcp"
+tool_timeout_secs = 60
+transport = "http"
+url = "http://127.0.0.1:8765/mcp"
+[storage.qdrant.default]
+collection = "zeroclaw_memories"
+[agents.default]
+mcp_bundles = ["lab"]
+model_provider = "vllm.default"
+risk_profile = "default"
+runtime_profile = "default"
+[peer_groups.slack_default]
+agents = ["default"]
+channel = "slack"
+external_peers = [${SLACK_ALLOWED_ADMIN_USERS}]
+[risk_profiles.default]
+allowed_commands = ["*", "ssh"]
+allowed_roots = ["/zeroclaw-data/.ssh", "/etc/passwd"]
+always_ask = []
+auto_approve = ["*"]
+block_high_risk_commands = false
+excluded_tools = [
+    "model_routing_config",
+    "model_switch",
+    "proxy_config",
+    "pushover",
+    "calculator",
+    "weather",
+    "canvas",
+    "llm_task",
+    "screenshot",
+    "image_info",
+    "sessions_list",
+    "sessions_history",
+    "sessions_send",
+    "poll",
+    "reaction",
+    "ask_user",
+    "escalate_to_human",
+    "sessions_current",
+    "sessions_reset",
+    "sessions_delete",
+]
+firejail_args = []
+forbidden_paths = ["/etc", "/root", "/home", "/usr", "/bin", "/sbin", "/lib", "/opt", "/boot", "/dev", "/proc", "/sys", "/var", "/tmp", "~/.gnupg", "~/.aws", "~/.config"]
+level = "full"
+require_approval_for_medium_risk = true
+sandbox_backend = "landlock"
+sandbox_enabled = true
+shell_env_passthrough = ["SSH_AUTH_SOCK"]
+workspace_only = true
+[runtime_profiles.default]
+deferred_builtin_tools = true
 compact_context = true
 context_aware_tools = false
 keep_tool_context_turns = 2
+max_actions_per_hour = 20
 max_context_tokens = 32000
+max_cost_per_day_cents = 500
 max_history_messages = 50
 max_system_prompt_chars = 0
 max_tool_iterations = 10
-max_tool_result_chars = 50000
+max_tool_result_chars = 32000
 parallel_tools = false
+shell_timeout_secs = 60
 tool_call_dedup_exempt = []
 tool_dispatcher = "auto"
 tool_filter_groups = []
 
-[agent.context_compression]
-enabled = true
-identifier_policy = "strict"
-max_passes = 3
-protect_first_n = 3
-protect_last_n = 4
-source_max_chars = 50000
-summary_max_chars = 4000
-threshold_ratio = 0.5
-timeout_secs = 60
-tool_result_retrim_chars = 2000
-tool_result_trim_exempt = []
+[providers.models.vllm]
 
-[agent.eval]
+[agents.default.identity]
+aieos_path = "/zeroclaw-data/.zeroclaw/identity.json"
+format = "aieos"
+
+[runtime_profiles.default.eval]
 enabled = false
 max_retries = 1
 min_quality_score = 0.5
 
-[agent.history_pruning]
+[runtime_profiles.default.history_pruning]
 collapse_tool_results = true
 enabled = false
 keep_recent = 4
 max_tokens = 8192
 
-[agent.thinking]
+[runtime_profiles.default.thinking]
 default_level = "medium"
-
-[autonomy]
-allowed_commands = ["*", "ssh"]
-allowed_roots = ["~/.ssh"]
-always_ask = []
-auto_approve = ["*"]
-block_high_risk_commands = false
-forbidden_paths = ["/etc", "/root", "/home", "/usr", "/bin", "/sbin", "/lib", "/opt", "/boot", "/dev", "/proc", "/sys", "/var", "/tmp", "~/.gnupg", "~/.aws", "~/.config"]
-level = "full"
-max_actions_per_hour = 20
-max_cost_per_day_cents = 500
-non_cli_excluded_tools = []
-require_approval_for_medium_risk = true
-shell_env_passthrough = ["SSH_AUTH_SOCK"]
-shell_timeout_secs = 60
-workspace_only = true
 
 [backup]
 compress = true
@@ -79,6 +130,7 @@ max_keep = 10
 
 [browser]
 allowed_domains = ["*"]
+automation_enabled = true
 backend = "rust_native"
 enabled = true
 native_headless = true
@@ -109,17 +161,6 @@ session_ttl_hours = 0
 show_tool_calls = false
 
 [channels.slack]
-thread_replies = false
-allowed_users = [${SLACK_ALLOWED_ADMIN_USERS}]
-app_token = "${SLACK_ADMIN_APP_TOKEN}"
-bot_token = "${SLACK_ADMIN_BOT_TOKEN}"
-channel_ids = ["*"]
-draft_update_interval_ms = 1200
-enabled = true
-interrupt_on_new_message = false
-mention_only = false
-stream_drafts = false
-use_markdown_blocks = false
 
 [claude_code]
 allowed_tools = ["Read", "Edit", "Bash", "Write"]
@@ -162,50 +203,6 @@ warn_at_percent = 80
 mode = "warn"
 reserve_percent = 10
 
-[cost.prices]
-
-[cost.prices."anthropic/claude-3-haiku"]
-input = 0.25
-output = 1.25
-
-[cost.prices."anthropic/claude-3.5-sonnet"]
-input = 3.0
-output = 15.0
-
-[cost.prices."anthropic/claude-opus-4-20250514"]
-input = 15.0
-output = 75.0
-
-[cost.prices."anthropic/claude-sonnet-4-20250514"]
-input = 3.0
-output = 15.0
-
-[cost.prices."google/gemini-1.5-pro"]
-input = 1.25
-output = 5.0
-
-[cost.prices."google/gemini-2.0-flash"]
-input = 0.1
-output = 0.4
-
-[cost.prices."openai/gpt-4o"]
-input = 5.0
-output = 15.0
-
-[cost.prices."openai/gpt-4o-mini"]
-input = 0.15
-output = 0.6
-
-[cost.prices."openai/o1-preview"]
-input = 15.0
-output = 60.0
-
-[cron]
-catch_up_on_startup = true
-enabled = true
-jobs = []
-max_run_history = 50
-
 [data_retention]
 categories = []
 dry_run = false
@@ -223,8 +220,8 @@ host = "127.0.0.1"
 idempotency_max_keys = 10000
 idempotency_ttl_secs = 300
 pair_rate_limit_per_minute = 10
-paired_tokens = [""]
-port = 42617
+paired_tokens = []
+port = 42618
 rate_limit_max_keys = 10000
 require_pairing = true
 session_persistence = true
@@ -270,6 +267,7 @@ max_run_history = 100
 min_interval_minutes = 5
 task_timeout_secs = 600
 two_phase = true
+agent = "default"
 
 [hooks]
 enabled = true
@@ -290,10 +288,6 @@ allowed_domains = ["*"]
 enabled = true
 max_response_size = 1000000
 timeout_secs = 30
-
-[identity]
-format = "aieos"
-aieos_path = "/zeroclaw-data/.zeroclaw/identity.json"
 
 [image_gen]
 api_key_env = "FAL_API_KEY"
@@ -361,9 +355,6 @@ model = "stable-diffusion-xl-1024-v1-0"
 [mcp]
 deferred_loading = true
 enabled = true
-servers = [
-    { name = "jetson-telemetry-mcp", transport = "http", url = "http://127.0.0.1:8765/mcp", tool_timeout_secs = 60 },
-]
 
 [media_pipeline]
 describe_images = true
@@ -396,8 +387,7 @@ response_cache_enabled = false
 response_cache_hot_entries = 256
 response_cache_max_entries = 5000
 response_cache_ttl_minutes = 60
-retrieval_stages = ["cache", "fts", "vector"]
-search_mode = "hybrid"
+search_mode = "bm25"
 snapshot_enabled = false
 snapshot_on_hygiene = false
 vector_weight = 0.7
@@ -409,9 +399,6 @@ read_only_namespaces = []
 
 [memory.policy.retention_days_by_category]
 
-[memory.qdrant]
-collection = "zeroclaw_memories"
-
 [microsoft365]
 auth_flow = "client_credentials"
 enabled = false
@@ -422,15 +409,6 @@ token_cache_encrypted = true
 allow_remote_fetch = false
 max_image_size_mb = 5
 max_images = 4
-
-[node_transport]
-allowed_peers = []
-connection_pool_size = 4
-enabled = true
-max_request_age_secs = 300
-mutual_tls = false
-require_https = true
-shared_secret = ""
 
 [nodes]
 enabled = false
@@ -452,8 +430,6 @@ backend = "none"
 runtime_trace_max_entries = 200
 runtime_trace_mode = "none"
 runtime_trace_path = "state/runtime-trace.jsonl"
-uplift_enabled = true
-uplift_trace_path = "state/uplift-trace.jsonl"
 
 [opencode_cli]
 enabled = false
@@ -508,13 +484,10 @@ rules = []
 api_keys = []
 channel_initial_backoff_secs = 2
 channel_max_backoff_secs = 60
-fallback_providers = []
 provider_backoff_ms = 500
 provider_retries = 2
 scheduler_poll_secs = 15
 scheduler_retries = 2
-
-[reliability.model_fallbacks]
 
 [runtime]
 kind = "native"
@@ -532,6 +505,8 @@ read_only_rootfs = true
 enabled = true
 max_concurrent = 4
 max_tasks = 64
+catch_up_on_startup = true
+max_run_history = 50
 
 [secrets]
 encrypt = true
@@ -549,16 +524,6 @@ enabled = false
 require_otp_to_resume = true
 state_file = "~/.zeroclaw/estop-state.json"
 
-[security.nevis]
-client_id = ""
-enabled = false
-instance_url = ""
-realm = "master"
-require_mfa = false
-role_mapping = []
-session_timeout_secs = 3600
-token_validation = "local"
-
 [security.otp]
 cache_valid_secs = 300
 challenge_max_attempts = 3
@@ -568,19 +533,6 @@ gated_domain_categories = []
 gated_domains = []
 method = "totp"
 token_ttl_secs = 30
-
-[security.resources]
-max_cpu_time_seconds = 60
-max_memory_mb = 512
-max_subprocesses = 10
-memory_monitoring = true
-
-[security.sandbox]
-# Landlock stays off on this ZeroClaw version: its backend applies the
-# ruleset to the agent process itself rather than only to the commands it
-# spawns (fixed upstream in v0.8.5). Select "landlock" after that upgrade.
-backend = "none"
-firejail_args = []
 
 [security.webauthn]
 enabled = false
@@ -621,25 +573,14 @@ max_finished_runs = 100
 
 [storage]
 
-[storage.provider]
-
-[storage.provider.config]
-provider = ""
-schema = "public"
-table = "memories"
-
-[swarms]
-
 [text_browser]
 enabled = false
 timeout_secs = 30
 
 [transcription]
 endpoint = "https://api.groq.com/openai/v1/audio/transcriptions"
-default_provider = "groq"
 enabled = false
 max_duration_secs = 120
-model = "whisper-large-v3-turbo"
 transcribe_non_ptt_audio = false
 
 [trust]
@@ -651,13 +592,12 @@ success_boost = 0.01
 
 [tts]
 default_format = "mp3"
-default_provider = "openai"
 default_voice = "alloy"
 enabled = false
 max_text_length = 4096
 
 [tunnel]
-provider = "none"
+tunnel_provider = "none"
 
 [verifiable_intent]
 enabled = false
@@ -680,9 +620,9 @@ mode = "scrape"
 [web_search]
 enabled = true
 max_results = 5
-provider = "brave"
 brave_api_key = "${BRAVE_SEARCH_API_KEY}"
 timeout_secs = 15
+search_provider = "brave"
 
 [workspace]
 cross_workspace_search = false

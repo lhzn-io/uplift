@@ -15,9 +15,9 @@ export VLLM_GPU_MEMORY_UTILIZATION=${VLLM_GPU_MEMORY_UTILIZATION:-"dummy"}
 export VLLM_EXTRA_ARGS=${VLLM_EXTRA_ARGS:-"dummy"}
 
 if [[ "${1:-}" == "--zeroclaw-only" || "${1:-}" == "zeroclaw" ]]; then
-    log "Stopping ONLY zeroclaw"
-    docker compose stop zeroclaw >/dev/null || \
-        warn "docker compose stop zeroclaw reported a problem"
+    log "Stopping ONLY the zeroclaw agents"
+    docker compose stop zeroclaw-operator zeroclaw-admin >/dev/null || \
+        warn "docker compose stop zeroclaw-operator zeroclaw-admin reported a problem"
     echo ""
     echo "ZeroClaw stopped (vLLM reasoning-engine is still running)."
     echo ""

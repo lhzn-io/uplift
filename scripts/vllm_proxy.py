@@ -12,7 +12,16 @@ import os
 app = FastAPI()
 client = httpx.AsyncClient(base_url="http://127.0.0.1:8000", timeout=None)
 
-TRACE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "workspace/state/uplift-trace.jsonl")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Per-request records sit beside the agents' per-turn records under traces/.
+TRACE_FILE = os.environ.get(
+    "UPLIFT_PROXY_TRACE_PATH",
+    os.path.join(REPO_ROOT, "traces", "proxy", "uplift-trace.jsonl"),
+)
+os.makedirs(os.path.dirname(TRACE_FILE), exist_ok=True)
+# The agents reach the proxy over host networking on loopback; nothing else should.
+LISTEN_HOST = os.environ.get("VLLM_PROXY_HOST", "127.0.0.1")
+LISTEN_PORT = int(os.environ.get("VLLM_PROXY_PORT", "8100"))
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 logger = logging.getLogger("vllm-proxy")
@@ -155,4 +164,4 @@ def write_trace(request, req_json, status_code, latency_ms, input_tokens, output
         logger.error(f"Failed to write trace: {e}")
 
 if __name__ == "__main__":
-    uvicorn.run("vllm_proxy:app", host="0.0.0.0", port=8100)
+    uvicorn.run("vllm_proxy:app", host=LISTEN_HOST, port=LISTEN_PORT)

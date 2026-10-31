@@ -12,6 +12,7 @@
 # Installs:
 #   - C build dependencies for the ZeroClaw crates
 #   - GitHub CLI (gh), used as the git credential helper for the https submodules
+#   - Node.js 24, for ZeroClaw's dashboard build (`cargo web build`)
 #   - rustup, with the toolchain pinned in rust-toolchain.toml
 # Configures:
 #   - git identity (only if unset)
@@ -63,6 +64,27 @@ if ! command -v gh >/dev/null 2>&1; then
     sudo apt-get install -y gh
 else
     printf '  %s - skipping\n' "$(gh --version | head -n 1)"
+fi
+
+# ---------------------------------------------------------------------------
+# 2b. Node.js 24 (NodeSource apt repository)
+#     ZeroClaw's dashboard build (`cargo web build`) generates its TypeScript
+#     API client with npm/npx from the gateway's OpenAPI spec, so the host needs
+#     Node; ZeroClaw's web/package.json requires node >= 24.
+# ---------------------------------------------------------------------------
+log "Checking Node.js"
+NODE_MAJOR=24
+if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt "$NODE_MAJOR" ]; then
+    KEYRING=/etc/apt/keyrings/nodesource.gpg
+    sudo mkdir -p -m 755 /etc/apt/keyrings
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        | sudo gpg --dearmor --yes -o "$KEYRING"
+    echo "deb [signed-by=${KEYRING}] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+        | sudo tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+    sudo apt-get update -qq
+    sudo apt-get install -y nodejs
+else
+    printf '  node %s - skipping\n' "$(node --version)"
 fi
 
 # ---------------------------------------------------------------------------

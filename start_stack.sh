@@ -74,29 +74,28 @@ if [ "$is_running" = false ]; then
     docker compose up -d zeroclaw-operator zeroclaw-admin
 fi
 
-echo ""
-echo "  logs: docker compose logs -f reasoning-engine"
-echo "  or:   docker compose logs -f"
-echo ""
-
-if ! pgrep -f "vllm_proxy.py" > /dev/null; then
-    echo "  Starting vLLM proxy for capability translation..."
-    nohup python3 "${SCRIPT_DIR}/scripts/vllm_proxy.py" --listen-port 8100 --vllm-port 8000 > "${SCRIPT_DIR}/vllm_proxy.log" 2>&1 &
+# The agents reach vLLM through the instrumentation proxy on 127.0.0.1:8100.
+# Prefer the user systemd unit from scripts/install_vllm_proxy.sh; fall back to
+# its venv. The system python3 lacks the proxy's dependencies.
+PROXY_VENV="${SCRIPT_DIR}/scripts/.vllm-proxy-venv/bin/python"
+if systemctl --user cat vllm-proxy.service >/dev/null 2>&1; then
+    log "Starting vLLM proxy (systemd user unit)..."
+    systemctl --user start vllm-proxy.service || warn "vllm-proxy service failed to start"
+elif ! pgrep -f "vllm_proxy.py" > /dev/null; then
+    if [ -x "$PROXY_VENV" ]; then
+        log "Starting vLLM proxy (venv)..."
+        (cd "${SCRIPT_DIR}/scripts" && nohup "$PROXY_VENV" vllm_proxy.py > "${SCRIPT_DIR}/vllm_proxy.log" 2>&1 &)
+    else
+        warn "vLLM proxy is not installed; run ./scripts/install_vllm_proxy.sh"
+    fi
 fi
-echo "  Logs:     docker logs -f reasoning-engine"
-echo "  Endpoint: http://localhost:8000/v1 (Native) | :8100/v1 (Proxy)"
-
-# ---------------------------------------------------------------------------
-# if ! pgrep -f "zeroclaw daemon" > /dev/null && ! nc -z 127.0.0.1 42617 2>/dev/null ; then
-#     log "Starting ZeroClaw... (not found on port 42617)..."
-#     nohup zeroclaw daemon --config-dir "${SCRIPT_DIR}/.zeroclaw" > "${SCRIPT_DIR}/zeroclaw_daemon.log" 2>&1 &
-# fi
-# 
 
 echo ""
 echo "Sovereign Stack is up."
 echo ""
-echo "  Dashboard:      http://127.0.0.1:42617"
-echo "  Inference logs: docker logs -f reasoning-engine"
-echo "  Daemon logs:    tail -f ${SCRIPT_DIR}/zeroclaw_daemon.log"
+echo "  Dashboards:     http://127.0.0.1:42617 (operator), :42618 (admin), via SSH tunnel"
+echo "  Endpoints:      http://127.0.0.1:8000/v1 (vLLM) | :8100/v1 (proxy)"
+echo "  Inference logs: docker compose logs -f reasoning-engine"
+echo "  Agent logs:     docker compose logs -f zeroclaw-operator zeroclaw-admin"
+echo "  Traces:         ${SCRIPT_DIR}/traces/"
 echo ""
